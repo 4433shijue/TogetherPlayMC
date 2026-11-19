@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import {orbFaces} from '../src/orb-faces.mjs';
+import {orbCatalogue} from '../src/orb-forms.mjs';
+import {buildOrbMeshes} from '../src/orb-geometry.mjs';
+const json=JSON.stringify(orbFaces);
+for(const target of ['../web/orb-faces.json','../companion-mod/common/src/main/resources/assets/together_companion/orb-faces.json'])await fs.writeFile(new URL(target,import.meta.url),json+'\n');
+console.log('Prepared 14 shared companion expressions.');
+for(const target of ['../web/orb-forms.json','../companion-mod/common/src/main/resources/assets/together_companion/orb-forms.json'])await fs.writeFile(new URL(target,import.meta.url),JSON.stringify(orbCatalogue)+'\n');
+console.log('Prepared 7 shapes, 8 dog breeds, 5 cat coats and fitted accessories.');
+const meshes=JSON.stringify(buildOrbMeshes());
+for(const target of ['../web/orb-meshes.json','../companion-mod/common/src/main/resources/assets/together_companion/orb-meshes.json'])await fs.writeFile(new URL(target,import.meta.url),meshes+'\n');
+console.log('Prepared shared sculpted meshes and curved face surfaces ('+meshes.length+' bytes).');
+await fs.copyFile(new URL('../src/orb-render.mjs',import.meta.url),new URL('../web/orb-render.js',import.meta.url));

@@ -1,0 +1,33 @@
+allprojects {
+    group = 'local.togetherplay'
+    version = '0.6.0'
+    repositories { mavenCentral() }
+}
+subprojects {
+    apply plugin: 'java'
+    java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 17 }
+    sourceSets.main.java.srcDir '../common/src/main/java'
+    sourceSets.main.resources.srcDir '../common/src/main/resources'
+    sourceSets.test.java.srcDir '../common/src/test/java'
+    sourceSets.test.resources.srcDir '../common/src/test/resources'
+    tasks.register('orbMotionTest', JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'togetherplay.companion.OrbMotionTest'
+    }
+    tasks.named('check') { dependsOn tasks.named('orbMotionTest') }
+    tasks.register('chatViewportTest', JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'togetherplay.companion.ChatViewportTest'
+    }
+    tasks.named('check') { dependsOn tasks.named('chatViewportTest') }
+    tasks.register('nativeChatTest', JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'togetherplay.companion.NativeChatTest'
+    }
+    tasks.named('check') { dependsOn tasks.named('nativeChatTest') }
+    tasks.withType(Jar).configureEach { preserveFileTimestamps = false; reproducibleFileOrder = true }
+}

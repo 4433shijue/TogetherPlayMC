@@ -1,0 +1,23 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+import {createApp} from '../src/server.mjs';
+import {Store} from '../src/store.mjs';
+import {providerUsage} from '../src/providers.mjs';
+const {chromium}=await import(pathToFileURL(process.env.TOGETHER_PLAYWRIGHT).href);
+const directory=path.resolve('work/v016-ui-'+Date.now()),screenshots=path.resolve('docs/screenshots/v016');await fs.mkdir(screenshots,{recursive:true});
+const seed=new Store(directory),role=seed.roles()[0];seed.set('provider',{protocol:'openai',url:'http://127.0.0.1:1',model:'本地验收夹具',toolMode:'chat',hourlyLimit:120,cachePolicy:'auto'});seed.event('usage',{input:900,cacheRead:900,model:'旧口径夹具',kind:'chat'},role.id);seed.close();
+let calls=0,hold=false;
+const request=async(c,input,signal,onText)=>{calls++;if(hold)return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));onText?.('收');await new Promise(r=>setTimeout(r,80));return {content:'收到',calls:[],usage:providerUsage(c,{prompt_tokens:2000,completion_tokens:2,prompt_tokens_details:{cached_tokens:calls===1?0:1900}})};};request.contextSource='fixture';
+const app=await createApp({directory,port:0,companionProfiles:[],companionRequest:request});let browser;const errors=[];
+try{
+ browser=await chromium.launch({headless:true,channel:'msedge'});const page=await browser.newPage({viewport:{width:1280,height:960}});page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url);await page.locator('#status').filter({hasText:/./}).waitFor();
+ await page.locator('[data-nav-group="settings"] summary').click();await page.locator('[data-page="provider"]').click();await page.locator('#cache-policy-hint').filter({hasText:'未识别'}).waitFor();assert.equal(await page.locator('#cache-policy').inputValue(),'auto');await page.locator('#cache-policy').selectOption('observe');await page.locator('#provider-form').getByRole('button',{name:'保存连接',exact:true}).click();await page.getByText('连接设置已保存。',{exact:true}).waitFor();assert.equal(app.store.get('provider').cachePolicy,'observe');await page.locator('#provider-form').screenshot({path:path.join(screenshots,'cache-policy.png')});
+ await page.locator('[data-page="usage"]').click();await page.locator('#usage-today').getByText('旧口径请求',{exact:true}).waitFor();assert.ok(await page.locator('#cache-start').isDisabled());await page.locator('#cache-preview').click();await page.locator('#cache-start:enabled').waitFor();assert.equal(calls,0);assert.match(await page.locator('#cache-test-input').textContent(),/虚构花园/);await page.locator('#cache-test-panel').screenshot({path:path.join(screenshots,'cache-preview.png')});
+ await page.locator('#cache-start').click();await page.locator('#cache-test-status').filter({hasText:'测试完成'}).waitFor();assert.equal(calls,3);assert.equal(await page.locator('#cache-test-results tr').count(),4);assert.ok(await page.locator('#cache-start').isDisabled());assert.ok(await page.locator('#cache-cancel').isDisabled());await page.locator('#usage-today').getByText('66.7%',{exact:true}).waitFor();await page.locator('#cache-test-panel').screenshot({path:path.join(screenshots,'cache-results.png')});
+ await page.locator('#usage-kind').selectOption('cache-test');await page.locator('#usage-today').getByText('完整回执的 token 读取比例（3 次）',{exact:true}).waitFor();assert.match(await page.locator('#usage-today').textContent(),/63.3%/);await page.locator('#page-usage').screenshot({path:path.join(screenshots,'cache-usage.png')});
+ hold=true;await page.locator('#cache-preview').click();await page.locator('#cache-start:enabled').waitFor();await page.locator('#cache-start').click();await page.locator('#cache-cancel:enabled').waitFor();await page.locator('#cache-cancel').click();await page.locator('#cache-test-status').filter({hasText:'测试已取消'}).waitFor();assert.equal(calls,4);assert.ok(await page.locator('#cache-cancel').isDisabled());
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(screenshots,'cache-mobile.png'),fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true);assert.deepEqual(errors,[]);
+ assert.equal(app.store.conversation(role.id,'').length,0);const result={externalProvider:false,fixtureRequests:calls,policyPersistencePassed:true,previewNoRequestPassed:true,threeRequestsPassed:true,buttonStatePassed:true,cancelPassed:true,usageFiltersAndRatiosPassed:true,mobileOverflowPassed:true,pageErrors:errors};await fs.writeFile('work/v016-ui-acceptance.json',JSON.stringify(result,null,2));console.log(result);
+}finally{await browser?.close();await app.close();}

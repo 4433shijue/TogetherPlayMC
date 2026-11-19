@@ -1,0 +1,9 @@
+{
+  "name": "togetherplaymc-desktop",
+  "version": "0.16.0",
+  "private": true,
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "45.2.1"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "together_companion",
+  "version": "0.6.0",
+  "name": "Together Companion",
+  "description": "A private, client-side conversational companion. Singleplayer only.",
+  "environment": "client",
+  "entrypoints": {"client": ["togetherplay.companion.fabric.FabricCompanion"]},
+  "depends": {"fabricloader": ">=0.16.14", "fabric-api": "*", "minecraft": "1.20.1", "java": ">=17"}
+}

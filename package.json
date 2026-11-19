@@ -1,0 +1,29 @@
+{
+  "name": "togetherplaymc",
+  "version": "0.16.0",
+  "private": true,
+  "type": "module",
+  "description": "Minecraft 1.20.1 本地 AI 陪玩、角色、记忆与生活冒险控制台。",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "prepare:vanilla": "node scripts/prepare-vanilla.mjs",
+    "prepare:companion": "node scripts/prepare-companion.mjs",
+    "start": "node src/server.mjs --open",
+    "experiment": "node src/experiment.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "build:companion": "node scripts/build-companion.mjs",
+    "qa:knowledge": "node scripts/qa-knowledge-v05.mjs",
+    "package:windows": "node scripts/package-release.mjs",
+    "qa:package": "node scripts/qa-package.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "fflate": "0.8.3",
+    "mineflayer": "4.39.0",
+    "mineflayer-pathfinder": "2.4.5",
+    "prismarine-nbt": "2.8.0",
+    "vec3": "0.1.10"
+  }
+}

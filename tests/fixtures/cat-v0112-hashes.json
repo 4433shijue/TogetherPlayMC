@@ -1,0 +1,155 @@
+{
+  "meshes": {
+    "body-kitten": "a12f7477ad04eeec9da9cc5ab40df167b7cb6812a4563a1241c8ac34997e5b6b",
+    "pet-tail-kitten": "3ccea0e74b686585fcc87c8c89f410adfe339f029740dffa81652606bf022931",
+    "pet-ear-kitten-Left": "665ee0d7d00faeb69d339e007c56710a75326e9f0d8281123f32cfaa1f2032d7",
+    "pet-inner-kitten-Left": "78aaf8a019a0810688916b2ef9f3a4a2877085da221d6aaea29d0932b43f8385",
+    "pet-ear-kitten-Right": "c40b0469a8db72ef8e55966923e6a02ce2983a118e5a8fb2f3e09bc2a469f75f",
+    "pet-inner-kitten-Right": "7d25412475919dd28c6a697c24219aff50c5fdbe02137cfdbdf54f1f105ea301"
+  },
+  "form": {
+    "id": "kitten",
+    "name": "猫猫球",
+    "earType": "cat",
+    "tailType": "cat",
+    "shape": [
+      1.06,
+      0.9,
+      0.94,
+      0.095
+    ],
+    "palette": {
+      "mode": "gradient",
+      "color": "#FFF6E7",
+      "color2": "#E5DFD0",
+      "accentColor": "#F0E7D8",
+      "muzzleColor": "#FFFAF0",
+      "markingColor": "#C8C2B6",
+      "markingColor2": "#AAA59B",
+      "innerEarColor": "#E2B4AD",
+      "noseColor": "#B77F7B"
+    },
+    "material": "plush",
+    "softness": 0.48,
+    "face": [
+      0,
+      -0.015,
+      1,
+      0.99
+    ],
+    "parts": [
+      {
+        "kind": "mesh",
+        "mesh": "body-kitten",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rx": 1,
+        "ry": 1,
+        "rz": 1,
+        "material": "body",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1
+      },
+      {
+        "kind": "mesh",
+        "mesh": "pet-tail-kitten",
+        "x": 0.68,
+        "y": -0.42,
+        "z": -0.62,
+        "rx": 1,
+        "ry": 1,
+        "rz": 1,
+        "material": "accent",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1,
+        "motion": "tailCat"
+      },
+      {
+        "kind": "mesh",
+        "mesh": "pet-paw",
+        "x": -0.42,
+        "y": -0.77,
+        "z": 0.51,
+        "rx": 0.18,
+        "ry": 0.16,
+        "rz": 0.22,
+        "material": "body",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1,
+        "motion": "pawLeft"
+      },
+      {
+        "kind": "mesh",
+        "mesh": "pet-paw",
+        "x": 0.42,
+        "y": -0.77,
+        "z": 0.51,
+        "rx": 0.18,
+        "ry": 0.16,
+        "rz": 0.22,
+        "material": "body",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1,
+        "motion": "pawRight"
+      },
+      {
+        "kind": "mesh",
+        "mesh": "pet-pad",
+        "x": -0.42,
+        "y": -0.81,
+        "z": 0.69,
+        "rx": 0.09,
+        "ry": 0.065,
+        "rz": 0.025,
+        "material": "innerEar",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1,
+        "motion": "pawLeft"
+      },
+      {
+        "kind": "mesh",
+        "mesh": "pet-pad",
+        "x": 0.42,
+        "y": -0.81,
+        "z": 0.69,
+        "rx": 0.09,
+        "ry": 0.065,
+        "rz": 0.025,
+        "material": "innerEar",
+        "rotation": 0,
+        "pitch": 0,
+        "alpha": 1,
+        "motion": "pawRight"
+      }
+    ],
+    "earPreset": "pet-kitten",
+    "fittings": {
+      "ears": [
+        0.64,
+        0.52,
+        0.08
+      ],
+      "scarf": [
+        0.9328000000000001,
+        -0.55,
+        0.85
+      ],
+      "hat": [
+        0.46,
+        0.75
+      ],
+      "flower": [
+        0.45,
+        0.59,
+        0.65
+      ]
+    },
+    "description": "圆圆猫腮、短胡须和弯尾，五套毛色自由改"
+  }
+}

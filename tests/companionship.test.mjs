@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {Store} from '../src/store.mjs';
+import {moments,quietIntent,repeatsReply,placeContext} from '../src/companionship.mjs';
+import {proposePlace,placeSuggestions,decidePlace,placeIntent,locatePlace} from '../src/place-dialogue.mjs';
+import {retrieveMemories,memoryEvidence} from '../src/memory.mjs';
+import {places} from '../src/companion-plus.mjs';
+import {ChatCompanion} from '../src/chat-companion.mjs';
+import {VoiceService,validateVoice,validateRecording} from '../src/voice.mjs';
+import {createApp} from '../src/server.mjs';
+async function fixture(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'together-v08-')),store=new Store(dir),role=store.roles()[0],scope={role:role.id,world:'test',dimension:'overworld'};t.after(async()=>{store.close();await fs.rm(dir,{recursive:true,force:true});});return {dir,store,role,scope};}
+const state={dimension:'overworld',position:{x:30,y:64,z:0},biome:'plains',weather:'晴',time:10000,health:20,food:20,dead:false,advancementsKnown:true,advancements:[],nearby:[]};
+test('ambient events need transitions and reset their baseline on dimension change',()=>{
+ assert.deepEqual(moments(null,state),[]);assert.deepEqual(moments(state,state),[]);
+ const result=moments(state,{...state,weather:'雨',biome:'forest',time:14000,health:5,food:5,advancements:[{id:'diamond',title:'钻石'}]},{now:100});
+ assert.deepEqual(new Set(result.map(x=>x.key)),new Set(['biome:forest','weather:雨','daylight:true','hurt','hungry','progress:diamond']));assert.ok(result.every(x=>x.expires>100));assert.equal(result.find(x=>x.key==='progress:diamond').cooldown,86400000);
+ assert.equal(moments(state,{...state,dimension:'nether',health:5,biome:'nether'}).length,1);
+});
+test('recovery, respawn, tool wear, animals and arrival have bounded cues',()=>{
+ const home={id:'home',name:'家',dimension:'overworld',position:{x:0,y:64,z:0}};
+ const before={...state,dead:true,health:4,durability:.2},after={...state,position:{x:4,y:64,z:0},durability:.08,held:'铁镐',nearby:[{id:'cat',name:'猫',type:'cat',distance:4,hostile:false},{id:'zombie',name:'僵尸',type:'zombie',distance:7,hostile:true}]};
+ const events=moments(before,after,{places:[home]});for(const key of ['recovered','respawn','durability:铁镐','animal:cat','nearby-danger:zombie','arrival:home'])assert.ok(events.some(e=>e.key===key),key);
+ assert.ok(!moments(after,after,{places:[home]}).length);assert.ok(!moments(state,{...state,events:['背包物品发生变化','换手持物品']}).length);
+});
+test('quiet statements have bounded duration while questions do not alter preferences',()=>{assert.equal(quietIntent('安静五分钟',100).until,300100);assert.equal(quietIntent('安静 999 分钟',100).until,7200100);assert.equal(quietIntent('请先安静二十五分钟',100).until,1500100);assert.equal(quietIntent('安静一百零五分钟',100).until,6300100);assert.equal(quietIntent('为什么不说话？'),null);assert.equal(quietIntent('我喜欢安静的地方'),null);assert.equal(quietIntent('可以说话了').until,0);});
+test('Chinese repeat detection tolerates wording but preserves negation and changed coordinates',()=>{assert.equal(repeatsReply('我们在河边歇一会吧。',['我们在河边歇一会吧！']),true);assert.equal(repeatsReply('森林里的风景很漂亮。',['森林里的风景真漂亮。']),true);assert.equal(repeatsReply('这里不安全，先回去吧。',['这里很安全，先回去吧。']),false);assert.equal(repeatsReply('家在 120 64 20',['家在 100 64 20']),false);});
+test('place proposals capture original coordinates, require confirmation and isolate role/world/dimension',async t=>{
+ const {store,scope}=await fixture(t),o={...state,position:{...state.position}};const p=proposePlace(store,scope,'家',o);o.position.x=500;assert.equal(places(store,scope.role,scope.world).length,0);assert.equal(placeSuggestions(store,{...scope,world:'other'}).length,0);assert.throws(()=>decidePlace(store,{...scope,role:'other'},p.id,true),/不属于/);assert.throws(()=>decidePlace(store,{...scope,dimension:'nether'},p.id,true),/不属于/);decidePlace(store,scope,p.id,true);assert.equal(places(store,scope.role,scope.world)[0].position.x,30);assert.equal(placeSuggestions(store,scope).length,0);assert.throws(()=>decidePlace(store,scope,p.id,true),/过期/);
+ const next=proposePlace(store,scope,'家',o);assert.throws(()=>decidePlace(store,scope,next.id,true),/同名/);assert.equal(places(store,scope.role,scope.world).length,1);decidePlace(store,scope,next.id,false);
+});
+test('place conversation rejects hypothetical instructions and gives only known same-world distances',async t=>{
+ const {store,scope}=await fixture(t);assert.equal(placeIntent('以后这里就是我们的家'),'家');assert.equal(placeIntent('把这里记为河边小屋'),'河边小屋');assert.equal(placeIntent('如果这里就是我们的家'),null);const p=proposePlace(store,scope,'家',state);decidePlace(store,scope,p.id,true);
+ assert.match(locatePlace(store,scope,'家在哪里',{...state,position:{x:33,y:68,z:0}}),/约 5 格.*直线距离/);assert.equal(locatePlace(store,{...scope,world:'other'},'家在哪里',state),null);assert.equal(placeContext(places(store,scope.role,scope.world),{dimension:'overworld'})[0].distance,null);
+});
+test('selective recall skips greetings and unrelated queries, preserves explicit recall',()=>{const memories=[{text:'喜欢猫咪',world:'',dimension:'',kind:'fact',source:'user',created:new Date().toISOString()},{text:'另一个世界的家',world:'B',dimension:'',kind:'place',created:new Date().toISOString()}];assert.equal(retrieveMemories(memories,{query:'你好',selective:true,world:'A'}).length,0);assert.equal(retrieveMemories(memories,{query:'钻石怎么合成',selective:true,world:'A'}).length,0);assert.equal(retrieveMemories(memories,{query:'你记得我喜欢什么吗',selective:true,world:'A'}).length,1);});
+test('memory provenance distinguishes inferred text, quotes and user-confirmed facts',async t=>{const {store,role}=await fixture(t);const id=store.memory(role.id,'test','place','河边的小屋','companion');store.set('memoryEvidence:'+id,{source:'inferred',original:'我想在河边建房子'});const m=store.memories(role.id)[0];const result=memoryEvidence(store,m,Date.now()+8*86400000);assert.equal(result.stale,true);assert.match(result.evidenceLabel,/推测/);assert.equal(result.quote,'我想在河边建房子');assert.equal(memoryEvidence(store,{...m,source:'user'}).evidenceLabel,'玩家确认');store.deleteMemory(id);assert.equal(store.get('memoryEvidence:'+id),null);});
+test('local quiet and place commands use no model; proactive duplicates are hidden but direct replies remain',async t=>{
+ const {store,role}=await fixture(t);let calls=0;const events=[];const chat=new ChatCompanion({store,provider:()=>({model:'fixture',protocol:'openai',toolMode:'chat',hourlyLimit:100}),knowledge:{pack:()=>null,status:()=>({}),search:()=>[]},research:{budget:()=>({})},emit:e=>events.push(e),request:async()=>{calls++;return {content:'我在河边等你。',calls:[],usage:{}};}});chat.attach({profileId:'p',clientId:'c',world:'test',role});chat.update(1,{...state,active:true});await chat.receive('让我专心一会');assert.ok(chat.quietUntil>Date.now());await chat.receive('把这里记为家');assert.equal(calls,0);assert.equal(placeSuggestions(store,chat.scope()).length,1);await chat.receive('继续聊天');assert.equal(chat.quietUntil,0);await chat.receive('看看河边');await chat.receive('天晴了',{proactive:true});assert.equal(events.filter(e=>e.type==='reply'&&e.data.text==='我在河边等你。').length,1);await chat.receive('再说一遍');assert.equal(events.filter(e=>e.type==='reply'&&e.data.text==='我在河边等你。').length,2);chat.close();
+});
+function wav(){const b=Buffer.alloc(44+3200);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(16000,24);b.writeUInt32LE(32000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(3200,40);return b;}
+test('voice validates recording format, bounded length and strict settings',()=>{assert.equal(validateRecording(wav().toString('base64')).length,3244);assert.throws(()=>validateRecording('xxx'),/WAV/);const b=wav();b.writeUInt32LE(44100,24);assert.throws(()=>validateRecording(b.toString('base64')),/16 kHz/);assert.throws(()=>validateVoice({volume:101}),/范围/);assert.throws(()=>validateVoice({inputEnabled:'true'}),/开关/);assert.equal(validateVoice({}).inputEnabled,false);});
+test('voice cancellation interrupts only the matching request; disabling also cancels pending work',async t=>{
+ const {store}=await fixture(t);const voice=new VoiceService(store,async(r,signal)=>{if(r.action==='info')return {voices:[{name:'fixture',culture:'zh-CN'}],recognizers:[{culture:'zh-CN'}]};return await new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true}));});await voice.save({inputEnabled:true,outputEnabled:true});const one=voice.transcribe('session:1:',wav().toString('base64')),two=voice.transcribe('session:10:',wav().toString('base64'));const rejectOne=assert.rejects(one,/cancelled/),rejectTwo=assert.rejects(two,/cancelled/);voice.cancel('session:1:');assert.equal(voice.jobs.size,1);await rejectOne;await voice.save({inputEnabled:false,outputEnabled:false});await rejectTwo;assert.equal(voice.jobs.size,0);await assert.rejects(voice.transcribe('x',wav().toString('base64')),/开启/);assert.deepEqual(await voice.speak('x','你好'),{disabled:true});
+});
+test('native voice requires auth and live session; late result cannot cross dimension',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'together-voice-api-'));const app=await createApp({directory:dir,port:0,companionProfiles:[{id:'fixture',loader:'fabric',gameDir:dir}]});t.after(async()=>{await app.close();await fs.rm(dir,{recursive:true,force:true});});const profile=app.companion.profiles[0],chat=app.companion.chat;chat.attach({profileId:profile.id,clientId:'c',pack:'fixture',world:'test',role:app.store.roles()[0]});chat.update(1,state);app.store.set('voice',{inputEnabled:true});let complete;app.companion.voice.run=async r=>new Promise(resolve=>complete=resolve);
+ const post=(route,body,token=profile.token)=>fetch(app.url+'/companion/v1/'+route,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(body)});assert.equal((await post('voice/transcribe',{sessionId:chat.client.sessionId,data:wav().toString('base64')},'wrong')).status,403);
+ const pending=post('voice/transcribe',{sessionId:chat.client.sessionId,data:wav().toString('base64')});while(!complete)await new Promise(r=>setTimeout(r,10));chat.update(2,{dimension:'nether'});complete({text:'旧世界的录音'});const response=await pending;assert.equal(response.status,400);assert.match((await response.json()).error,/丢弃/);
+});
