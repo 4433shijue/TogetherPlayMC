@@ -16,7 +16,7 @@ import {placeSuggestions,decidePlace} from './place-dialogue.mjs';
 import {placeContext} from './companionship.mjs';
 
 const json=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));};
-export const companionProfile={version:'1.20.1',mode:'companion',singleplayerOnly:true,loaders:['Fabric 0.16.14','Forge 47.4.22'],modpacks:['元素觉醒 1.4.6'],capabilities:[{name:'私人文字聊天',status:'客户端陪伴',note:'游戏内按 T；模型服务在本机运行。'},{name:'球体跟随',status:'客户端形象',note:'不生成游戏实体、不操作世界。'},{name:'整合包资料',status:'按来源覆盖',note:'常见配方、任务与手册；特殊机制需核实。'}]};
+export const companionProfile={version:'1.20.1',mode:'companion',singleplayerOnly:true,loaders:['Fabric 0.16.14','Forge 47.4.22'],modpacks:['元素觉醒 1.4.6'],capabilities:[{name:'私人文字聊天',status:'客户端陪伴',note:'游戏内按 T；模型服务在本机运行。'},{name:'球体跟随',status:'客户端形象',note:'不生成第二名玩家；可在私人单人世界开启物品赠礼。'},{name:'整合包资料',status:'按来源覆盖',note:'常见配方、任务与手册；特殊机制需核实。'}]};
 export async function createCompanionAPI({store,provider,visionProvider,emit,role,getMode,setMode,legacy,directory,profiles:initialProfiles,request}) {
   const voice=new VoiceService(store);
   const profiles=(initialProfiles??await configuredProfiles(store)).map(p=>pairProfile(store,p));let sequence=0,closed=false;const events=[],jobs=new Set();
@@ -27,6 +27,12 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
   async function journeyAction(b,native=false){
     const scope=native?chat.scope():{role:role().id,world:b.world??chat.world,dimension:b.dimension??(b.world&&b.world!==chat.world?'':chat.observation?.dimension)??'',session:!b.world||b.world===chat.world?chat.trip?.id:''};
     const refreshRecap=()=>{if(chat.recap&&scope.world===chat.world&&scope.role===chat.role?.id)chat.recap=journey.recap(scope.role,scope.world,chat.observation?.dimension,chat.trip?.id);};
+    if(b.action==='gift-mode'||b.action==='gift-claim'||b.action==='gift-receipt'){
+      if(!native)throw Error('请在当前游戏中操作。');
+      if(b.action==='gift-mode')return chat.gifts.configure(b.mode);
+      if(b.action==='gift-claim')return chat.gifts.claim(b.id);
+      return chat.gifts.receipt(b.id,b.status);
+    }
     if(b.action==='keepsakes')return {keepsakes:keepsakes(store,scope.role,scope.world)};
     if(b.action==='places')return {places:placeContext(places(store,scope.role,scope.world),{...chat.observation,dimension:scope.dimension}),suggestions:placeSuggestions(store,scope)};
     if(b.action==='place-decide')return decidePlace(store,scope,b.id,b.accept===true);
@@ -97,7 +103,7 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
         const updated=store.saveRole({id:role().id,appearance:validateAppearance({...role().appearance,...b.appearance}),...(b.personality!==undefined?{personality:b.personality}:{}),...(b.chatter!==undefined?{chatter:b.chatter}:{}),...(b.guideLevel!==undefined?{guideLevel:b.guideLevel}:{})});chat.changeRole(updated);json(res,200,{role:updated});return;
       }
       if(route==='events'&&req.method==='GET'){
-        const after=Number(b.after)||0;json(res,200,{cursor:sequence,events:events.filter(e=>e.eventId>after&&(!e.role||e.role===role().id)&&(!e.world||e.world===chat.world)),state:{...chat.state(),voice:voice.config()}});return;
+        const after=Number(b.after)||0;json(res,200,{cursor:sequence,events:events.filter(e=>e.eventId>after&&(!e.role||e.role===role().id)&&(!e.world||e.world===chat.world)),state:{...chat.state(),giftMode:chat.gifts.mode(),giftWaiting:chat.gifts.waiting(),voice:voice.config()}});return;
       }
       json(res,404,{error:'伙伴接口不存在。'});
     },

@@ -38,6 +38,7 @@ public final class CompanionConnection {
     public void command(String route,JsonObject payload){if(commands.size()>20)return;payload.addProperty("route",route);commands.add(payload);}
     public void send(String text){JsonObject b=new JsonObject();b.addProperty("text",text);command("chat",b);}
     public void send(String text,String mediaId){JsonObject b=new JsonObject();b.addProperty("text",text);b.addProperty("mediaId",mediaId);command("chat",b);}
+    boolean ownsSession(String id){return !id.isEmpty()&&id.equals(session);}
     public void cancel(){command("cancel",new JsonObject());}
     public void voice(String route,JsonObject data,Consumer<JsonObject> callback){
         long current=generation;String owner=session;

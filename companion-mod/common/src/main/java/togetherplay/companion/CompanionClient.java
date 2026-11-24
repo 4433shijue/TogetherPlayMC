@@ -42,11 +42,41 @@ public final class CompanionClient {
     private float lastYaw=0,lastHealth=20;
     private String lastDimension="",lastInventory="";
     private KnowledgeExporter exporter;
+    private String lastGift="";
+    private volatile long giftGeneration;
+    void invalidateGift(){giftGeneration++;}
+    private void pollGift(JsonObject state){
+        String id=CompanionConfig.get(state,"giftWaiting","");
+        if(id.isEmpty()||id.equals(lastGift)||mc.player==null)return;
+        lastGift=id;long generation=giftGeneration;String here=world,owner=roleId;
+        var server=mc.getSingleplayerServer();if(server==null||server.isPublished())return;
+        UUID playerId=mc.player.getUUID();JsonObject payload=new JsonObject();payload.addProperty("id",id);
+        request("gift-claim",payload,result->{
+            if(!result.has("gift")||generation!=giftGeneration||mc.getSingleplayerServer()!=server||!world.equals(here)||!roleId.equals(owner))return;
+            JsonObject g=result.getAsJsonObject("gift");String session=CompanionConfig.get(g,"session","");
+            if(!connection.ownsSession(session)||!id.equals(CompanionConfig.get(g,"id",""))||!owner.equals(CompanionConfig.get(g,"role","")))return;
+            var point=orb.interpolate(1);
+            Runnable delivery=new Runnable(){public void run(){
+                String status="unsafe";var player=server.getPlayerList().getPlayer(playerId);
+                if(point!=null&&player!=null&&connection.ownsSession(session)&&generation==giftGeneration&&System.currentTimeMillis()<g.get("expires").getAsLong()){
+                    try{status=OrbGift.drop(player,new Vec3(point.x(),point.y(),point.z()),g);}catch(RuntimeException ignored){status="unavailable";}
+                    if(status.equals("indexing")){
+                        GiftLoot.index(player.serverLevel()).thenRunAsync(this,server);return;
+                    }
+                }
+                final String outcome=status;
+                mc.execute(()->{if(!connection.ownsSession(session)||generation!=giftGeneration)return;
+                    JsonObject ack=new JsonObject();ack.addProperty("id",id);ack.addProperty("status",outcome);request("gift-receipt",ack,r->{});
+                });
+            }};
+            server.execute(delivery);
+        });
+    }
     public CompanionClient(Path game){INSTANCE=this;config=new CompanionConfig(game);connection=new CompanionConnection(config,e->mc.execute(()->event(e)));voice=new CompanionVoice(this);}
     private void event(JsonObject event){
         String type=CompanionConfig.get(event,"type","");JsonObject data=event.has("data")&&event.get("data").isJsonObject()?event.getAsJsonObject("data"):new JsonObject();
         if(type.equals("handshake")){
-            extended=data.has("capabilities")&&data.get("capabilities").toString().contains("journal");
+            invalidateGift();extended=data.has("capabilities")&&data.get("capabilities").toString().contains("journal");
             voice.stop();history.clear();settings(data.getAsJsonObject("role"));
             for(JsonElement row:data.getAsJsonArray("history")){JsonObject r=row.getAsJsonObject();history.add(new Line(CompanionConfig.get(r,"type","").equals("owner_chat")?"你":connection.name,CompanionConfig.get(r,"text",""),new JsonArray()));nativeChat.accept(CompanionConfig.get(r,"id",""));}
             // Restart the bounded export after a service restart; unchanged documents are deduplicated server-side.
@@ -58,13 +88,13 @@ public final class CompanionClient {
             if(type.equals("reply")){bubble=text.length()>70?text.substring(0,70)+"…":text;bubbleUntil=System.currentTimeMillis()+12000;expression.trigger("responding",System.currentTimeMillis());voice.speak(text);}
             if(type.equals("owner_chat")){expression.ownerChat(text,connection.name,System.currentTimeMillis());body.attend(System.currentTimeMillis(),config.form.equals("kitten")?350:0);}
             if(mc.player!=null&&!text.isBlank())mc.gui.getChat().addMessage(type.equals("reply")?NativeChat.message(connection.name,text,config.chatNameColor,config.chatColor):NativeChat.message("你",text,"#AAAAAA","#FFFFFF"));
-        }else if(type.equals("companion_cancel")){voice.stop();connection.draft="";connection.progress="";}else if(type.equals("companion_progress")){connection.draft=CompanionConfig.get(data,"text","");connection.progress=CompanionConfig.get(data,"label","");}
+        }else if(type.equals("companion_cancel")){invalidateGift();voice.stop();connection.draft="";connection.progress="";}else if(type.equals("companion_progress")){connection.draft=CompanionConfig.get(data,"text","");connection.progress=CompanionConfig.get(data,"label","");}
         else if(type.equals("companion_settings")){settings(data.getAsJsonObject("role"));}
-        else if(type.equals("state")){journeyState=data;if(data.has("voice"))voice.configure(data.getAsJsonObject("voice"));}
+        else if(type.equals("state")){journeyState=data;pollGift(data);if(data.has("voice"))voice.configure(data.getAsJsonObject("voice"));}
         else if(type.equals("command_result")){Consumer<JsonObject> callback=callbacks.remove(CompanionConfig.get(event,"requestId",""));if(callback!=null)callback.accept(data);else if(data.has("error"))notice(data.get("error").getAsString());}
         else if(type.equals("error")||type.equals("notice")){if(type.equals("error"))expression.trigger("confused",System.currentTimeMillis());String message=CompanionConfig.get(data,"message","");if(!message.isEmpty())notice(message);}
     }
-    private void settings(JsonObject role){if(role==null)return;String nextRole=CompanionConfig.get(role,"id","");if(!nextRole.equals(roleId)){voice.stop();roleId=nextRole;}nativeChat.scope(world+":"+CompanionConfig.get(role,"id",""));connection.name=CompanionConfig.get(role,"name",connection.name);if(role.has("appearance"))config.appearance(role.getAsJsonObject("appearance"));config.personality(role.has("personality")?role.getAsJsonObject("personality"):null);config.chatter=CompanionConfig.get(role,"chatter",config.chatter);config.guideLevel=CompanionConfig.get(role,"guideLevel",config.guideLevel);if(role.has("followDistance"))followDistance=Math.max(2,Math.min(6,role.get("followDistance").getAsDouble()));config.save();}
+    private void settings(JsonObject role){if(role==null)return;String nextRole=CompanionConfig.get(role,"id","");if(!nextRole.equals(roleId)){invalidateGift();voice.stop();roleId=nextRole;}nativeChat.scope(world+":"+CompanionConfig.get(role,"id",""));connection.name=CompanionConfig.get(role,"name",connection.name);if(role.has("appearance"))config.appearance(role.getAsJsonObject("appearance"));config.personality(role.has("personality")?role.getAsJsonObject("personality"):null);config.chatter=CompanionConfig.get(role,"chatter",config.chatter);config.guideLevel=CompanionConfig.get(role,"guideLevel",config.guideLevel);if(role.has("followDistance"))followDistance=Math.max(2,Math.min(6,role.get("followDistance").getAsDouble()));config.save();}
     public void notice(String text){history.add(new Line("提示",text,new JsonArray()));if(mc.player!=null)mc.gui.getChat().addMessage(NativeChat.message("伙伴提示",text,"#E6C889","#E6C889"));}
     public boolean sendNativeChat(String text){
         if(!NativeChat.route(text,mc.player!=null&&mc.getSingleplayerServer()!=null&&!mc.getSingleplayerServer().isPublished(),config.paired()&&connection.enabled))return false;
@@ -72,7 +102,7 @@ public final class CompanionClient {
         voice.stop();connection.send(text.trim());return true;
     }
     public void tick(){
-        tick++;if(mc.level==null||mc.player==null||mc.getSingleplayerServer()==null){if(!world.isEmpty()){world="";connection.world("");orb.reset();body.reset();expression.reset();exporter=null;history.clear();nativeChat.reset();callbacks.clear();captureAt=0;journeyState=new JsonObject();}return;}
+        tick++;if(mc.level==null||mc.player==null||mc.getSingleplayerServer()==null){if(!world.isEmpty()){invalidateGift();world="";connection.world("");orb.reset();body.reset();expression.reset();exporter=null;history.clear();nativeChat.reset();callbacks.clear();captureAt=0;journeyState=new JsonObject();}return;}
         String nextWorld=worldId();if(!world.equals(nextWorld)){world=nextWorld;orb.reset();body.reset();expression.reset();wasDead=wasSleeping=waitingForRecovery=false;sleepyNight=-1;history.clear();nativeChat.reset();callbacks.clear();progressObserver=new ProgressObserver();lastAdvancements=-1;recipeFingerprint=0;lastPosition=null;lastHealth=20;lastInventory="";lastDimension="";connection.world(world);exporter=null;}
         if(captureAt>0&&tick>=captureAt){captureAt=0;try{mc.setScreen(new PhotoScreen(this,GamePhoto.capture(mc),captureJournal));}catch(Exception e){history.add(new Line("提示","无法截取游戏画面："+e.getMessage(),new JsonArray()));openChat();}}
         if(tick%100==0)progressObserver.request(mc);
@@ -114,7 +144,7 @@ public final class CompanionClient {
         JsonObject o=new JsonObject();o.addProperty("expression",config.face?expression.state(System.currentTimeMillis(),connection.thinking):"calm");o.addProperty("dimension",dimension);o.addProperty("worldName",mc.getSingleplayerServer().getWorldData().getLevelName());
         o.addProperty("biome",mc.level.getBiome(mc.player.blockPosition()).unwrapKey().map(k->k.location().toString()).orElse("unknown"));
         o.addProperty("health",mc.player.getHealth());o.addProperty("food",mc.player.getFoodData().getFoodLevel());o.addProperty("time",mc.level.getDayTime()%24000);
-        o.addProperty("weather",mc.level.isThundering()?"雷雨":mc.level.isRaining()?"雨":"晴");o.addProperty("held",item(mc.player.getMainHandItem()));
+        o.addProperty("weather",mc.level.isThundering()?"雷雨":mc.level.isRaining()?"雨":"晴");o.addProperty("giftBridge",!mc.getSingleplayerServer().isPublished());o.addProperty("held",item(mc.player.getMainHandItem()));
         ItemStack held=mc.player.getMainHandItem();if(held.isDamageableItem())o.addProperty("durability",1.0-(double)held.getDamageValue()/held.getMaxDamage());else o.add("durability",JsonNull.INSTANCE);
         JsonArray nearby=new JsonArray();mc.level.getEntities(mc.player,mc.player.getBoundingBox().inflate(12),e->e instanceof net.minecraft.world.entity.LivingEntity&&e.isAlive()&&mc.player.hasLineOfSight(e)).stream().sorted(Comparator.comparingDouble(e->e.distanceToSqr(mc.player))).limit(6).forEach(e->{JsonObject entity=new JsonObject();entity.addProperty("id",e.getUUID().toString());entity.addProperty("type",BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString());entity.addProperty("name",e.getName().getString());entity.addProperty("distance",e.distanceTo(mc.player));entity.addProperty("hostile",e instanceof net.minecraft.world.entity.monster.Enemy);nearby.add(entity);});o.add("nearby",nearby);
         o.addProperty("screen",mc.screen!=null);o.addProperty("combat",hurt||mc.player.hurtTime>0||mc.player.getLastHurtByMob()!=null&&mc.player.tickCount-mc.player.getLastHurtByMobTimestamp()<160);
@@ -130,7 +160,7 @@ public final class CompanionClient {
         return o;
     }
     public static String item(ItemStack stack){return stack.isEmpty()?"空手":BuiltInRegistries.ITEM.getKey(stack.getItem())+" "+stack.getHoverName().getString()+" ×"+stack.getCount();}
-    public void cancelReply(){voice.stop();connection.cancel();mc.gui.setOverlayMessage(Component.literal("已停止回复和语音"),false);}
+    public void cancelReply(){invalidateGift();voice.stop();connection.cancel();mc.gui.setOverlayMessage(Component.literal("已停止回复和语音"),false);}
     public void openChat(){if(mc.player!=null&&mc.getSingleplayerServer()!=null)mc.setScreen(new CompanionScreen(this));}
     public void request(String action,JsonObject args,Consumer<JsonObject> callback){
         if(!extended){JsonObject error=new JsonObject();error.addProperty("error","请更新本地服务至 0.6 后使用这个功能。");callback.accept(error);return;}

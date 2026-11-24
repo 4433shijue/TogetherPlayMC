@@ -27,13 +27,22 @@ public final class CompanionScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("设置"),b->{draft=input.getValue();minecraft.setScreen(new AppearanceScreen(this,companion));}).bounds(width-76,12,56,20).build());
         addRenderableWidget(Button.builder(Component.literal("回忆"),b->minecraft.setScreen(new JourneyScreen(companion,false))).bounds(width-200,12,56,20).build());
         addRenderableWidget(Button.builder(Component.literal("打算"),b->minecraft.setScreen(new JourneyScreen(companion,true))).bounds(width-138,12,56,20).build());
-        int cell=(width-70)/6;
+        boolean gifts=companion.journeyState.has("giftMode");int cell=gifts?(width-76)/7:(width-70)/6;
         addRenderableWidget(Button.builder(Component.literal("取消回复"),b->{companion.cancelReply();}).bounds(20,37,cell,18).build());
         addRenderableWidget(Button.builder(Component.literal("资料来源"),b->minecraft.setScreen(new SourcesScreen(this,companion))).bounds(26+cell,37,cell,18).build());
         addRenderableWidget(Button.builder(Component.literal("让他看看"),b->companion.capture(false)).bounds(32+cell*2,37,cell,18).build());
         addRenderableWidget(Button.builder(Component.literal("记住这一刻"),b->companion.capture(true)).bounds(38+cell*3,37,cell,18).build());
         addRenderableWidget(Button.builder(Component.literal("地点"),b->minecraft.setScreen(new PlacesScreen(companion))).bounds(44+cell*4,37,cell,18).build());
         addRenderableWidget(Button.builder(Component.literal("语音"),b->minecraft.setScreen(new VoiceScreen(companion))).bounds(50+cell*5,37,cell,18).build());
+        if(gifts){
+            String mode=togetherplay.companion.CompanionConfig.get(companion.journeyState,"giftMode","off");
+            Button gift=addRenderableWidget(Button.builder(Component.literal(switch(mode){case "role"->"礼物:随心";case "progress"->"礼物:进度";default->"礼物:关";}),b->{
+                b.active=false;companion.invalidateGift();var args=new com.google.gson.JsonObject();
+                args.addProperty("mode",switch(mode){case "off"->"role";case "role"->"progress";default->"off";});
+                companion.request("gift-mode",args,r->{if(r.has("mode"))companion.journeyState.add("giftMode",r.get("mode"));else companion.notice(CompanionConfig.get(r,"error","设置未保存"));rebuildWidgets();});
+            }).bounds(56+cell*6,37,cell,18).build());
+            gift.setTooltip(Tooltip.create(Component.literal("当前存档的赠礼：关闭、由角色决定（可跨进度）、保护进度")));
+        }
         addRenderableWidget(Button.builder(Component.literal(guideName()),b->{companion.config.guideLevel=switch(companion.config.guideLevel){case "hint"->"next";case "next"->"full";default->"hint";};companion.connection.appearance();b.setMessage(Component.literal(guideName()));}).bounds(20,60,(width-52)/3,18).build());
         if(companion.journeyState.has("recap")&&!companion.journeyState.get("recap").isJsonNull()){
             addRenderableWidget(Button.builder(Component.literal("接着上次的打算"),b->{companion.request("recap-dismiss",new com.google.gson.JsonObject(),r->{});minecraft.setScreen(new JourneyScreen(companion,true));}).bounds(26+(width-52)/3,60,(width-52)/3,18).build());
