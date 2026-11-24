@@ -45,10 +45,11 @@ async function read(zip,e,limit,budget){
   return Buffer.concat(chunks,size);
 }
 const optMeta=n=>['manifest.json','modrinth.index.json','mmc-pack.json','version.json'].includes(n);
-function versionMeta(m){
+export const privatePath=sensitive;
+export function versionMeta(m){
   const libs=(m.libraries??[]).map(l=>l.name).join(' '),parts=m.components??[];
   const component=parts.find(p=>['net.minecraftforge','net.fabricmc.fabric-loader','org.quiltmc.quilt-loader','net.neoforged'].includes(p.uid));
-  return {version:short(parts.find(p=>p.uid==='net.minecraft')?.version??m.inheritsFrom??m.clientVersion??m.id),
+  return {version:short(parts.find(p=>p.uid==='net.minecraft')?.version??m.clientVersion??m.inheritsFrom??libs.match(/net\.fabricmc:intermediary:([^ ]+)/)?.[1]??(/^1\.\d+(?:\.\d+)?$/.test(m.id)?m.id:'')),
     loader:/neoforge/i.test(libs+' '+component?.uid)?'neoforge':/quilt/i.test(libs+' '+component?.uid)?'quilt':/net\.minecraftforge|net\.forge/.test(libs+' '+component?.uid)?'forge':/net\.fabricmc/.test(libs+' '+component?.uid)?'fabric':'unknown'};
 }
 export async function folderFiles(root){
@@ -66,7 +67,7 @@ export async function folderFiles(root){
 
 export async function inspectPack({file,folder,name,profile,scratch},progress=()=>{}){
   const docs=[],facts=new Map(),manifestMods=new Set(),warnings=new Set(),budget={left:4*1024**3};
-  let packName=name||path.basename(folder||file),version=profile?.version||'',loader=profile?.loader||'unknown',release='',format=folder?'folder':'zip',declared=0,docBytes=0,nestedEntries=0;
+  let packName=name||path.basename(folder||file),version=profile?.version||'',loader=profile?.loader||'unknown',release='',format=folder?'folder':'zip',declared=0,docBytes=0,nestedEntries=0,fingerprintComplete=true;
   const warn=s=>{if(warnings.size<30)warnings.add(s);};
   const add=(n,b,source)=>{try{
     for(const d of staticDocuments(n,b.toString('utf8').replace(/^\uFEFF/,''),source)){d.text=d.text.slice(0,16000);d.title=d.title.slice(0,300);docBytes+=Buffer.byteLength(d.text);docs.push(d);}
@@ -110,7 +111,7 @@ export async function inspectPack({file,folder,name,profile,scratch},progress=()
         if(m.game!=='minecraft'||m.formatVersion!==1)throw Error('不支持这个 Modrinth 清单版本。');
         format='modrinth';overrides='overrides';version=short(m.dependencies?.minecraft);
         loader=Object.keys(m.dependencies??{}).find(k=>['forge','fabric-loader','quilt-loader','neoforge'].includes(k))?.replace('-loader','')??'unknown';
-        for(const f of m.files){const p=safe(f.path);if(f.env?.client==='unsupported')continue;if(modFile(p))manifestMods.add(p);if((modFile(p)||dataFile(p))&&/^[a-f0-9]{128}$/i.test(f.hashes?.sha512))facts.set(p,f.hashes.sha512.toLowerCase());}
+        for(const f of m.files){const p=safe(f.path);if(f.env?.client==='unsupported')continue;if(modFile(p))manifestMods.add(p);if(modFile(p)||dataFile(p)){if(/^[a-f0-9]{128}$/i.test(f.hashes?.sha512))facts.set(p,f.hashes.sha512.toLowerCase());else fingerprintComplete=false;}}
       }else{
         if(m.manifestType!=='minecraftModpack'||m.manifestVersion!==1)throw Error('不支持这个 CurseForge 清单。');
         format='curseforge';overrides=safe(m.overrides||'overrides');version=short(m.minecraft?.version);
@@ -119,7 +120,7 @@ export async function inspectPack({file,folder,name,profile,scratch},progress=()
       }
     }else{
       const meta=['mmc-pack.json','version.json',path.basename(folder||prefix.slice(0,-1)||'')+'.json',...[...files.keys()].filter(n=>/^[^/]+\.json$/.test(n)&&!sensitive(n))].find(n=>files.has(n)&&!sensitive(n)&&(/^(mmc-pack|version)\.json$/.test(n)||n===path.basename(folder||prefix.slice(0,-1)||'')+'.json'||/1\.\d+/.test(n)));
-      if(meta){const v=versionMeta(json(await bytes(meta,4*1024**2)));version=v.version||version;loader=v.loader!=='unknown'?v.loader:loader;}
+      if(meta){const raw=await bytes(meta,4*1024**2);try{const v=versionMeta(json(raw));version=v.version||version;loader=v.loader!=='unknown'?v.loader:loader;}catch{warn('无法识别版本信息：'+meta);}}
     }
     let list=new Map();
     for(const n of files.keys()){
@@ -173,7 +174,7 @@ export async function inspectPack({file,folder,name,profile,scratch},progress=()
     const signatures=Object.fromEntries([...facts].sort(([a],[b])=>a<b?-1:a>b?1:0)),ids=[...manifestMods].sort();
     const key=digest(JSON.stringify([format==='folder'?'zip':format,version,loader,release,ids,signatures]),'sha256');
     const counts={};for(const d of docs)counts[d.kind]=(counts[d.kind]||0)+1;
-    return {pack:{id:'archive:'+key,name:short(packName),release,version,loader,format,counts,manifestOnly:Boolean(manifest)&&!list.size,mods:format==='curseforge'?Math.max(ids.length,[...facts.keys()].filter(modFile).length):new Set([...ids,...[...facts.keys()].filter(modFile)]).size,declared,warnings:[...warnings],status:'ready',progress:100},facts:signatures,docs};
+    return {pack:{id:'archive:'+key,name:short(packName),release,version,loader,format,counts,manifestOnly:Boolean(manifest)&&!list.size,mods:format==='curseforge'?Math.max(ids.length,[...facts.keys()].filter(modFile).length):new Set([...ids,...[...facts.keys()].filter(modFile)]).size,declared,fingerprintComplete,warnings:[...warnings],status:'ready',progress:100},facts:signatures,docs};
   }finally{zip?.close();if(ownScratch)await fs.rm(ownScratch,{recursive:true,force:true});}
 }
 

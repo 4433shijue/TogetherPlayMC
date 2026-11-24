@@ -54,6 +54,7 @@
 !/scripts/qa-v016-ui.mjs
 !/scripts/qa-cobble-game.mjs
 !/scripts/qa-pack-drop.mjs
+!/scripts/qa-pack-match-ui.mjs
 !/scripts/third-party-notices.mjs
 /docs/*
 !/docs/v016-release-notes.md

@@ -119,9 +119,15 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
         const b=await body(req);let result;
         if(b.action==='start')result=imports.start(b);
         else if(b.action==='cancel'){imports.cancel(b.id);result=imports.state();}
-        else if(b.action==='matches')result=await imports.matches(b.pack,b.root);
+        else if(b.action==='matches')result=await imports.matches(b.pack,b.root,b.cached===true);
+        else if(b.action==='remember-root'||b.action==='forget-root'){await imports.matcher.root(b.root,b.action==='forget-root');result=imports.state();}
         else if(b.action==='bind'||b.action==='unbind')result=await imports.bind(b.pack,b.profileId,b.action==='unbind');
-        else if(b.action==='search'&&typeof b.pack==='string'&&b.pack.startsWith('archive:')&&knowledge.pack(b.pack))result=knowledge.search(b.pack,String(b.query??'').slice(0,400),{spoilers:true,staticOnly:true});
+        else if(b.action==='supplement')result=imports.supplement(b.pack,b.profileId);
+        else if(b.action==='search')result=imports.search(b.pack,b.query,b.instance);
+        else if(b.action==='install'){
+          const p=await imports.installCandidate(b.pack,b.profileId);if(chat.client?.profileId===p.id)throw Error('请先退出游戏再安装。');
+          result=await installProfile(p,{endpoint:`http://127.0.0.1:${req.socket.localPort}`,directory});imports.installed(b.pack,b.profileId,p);store.set('installation:'+p.id,result);void index(p);
+        }
         else throw Error('无效的资料库操作。');
         json(res,200,result);return true;
       }

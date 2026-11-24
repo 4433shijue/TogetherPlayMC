@@ -16,7 +16,7 @@ export async function scanGames(input){
   const name=path.basename(dir),file=path.join(dir,name+'.json');let m;try{m=JSON.parse(await fs.readFile(file,'utf8'));}catch{continue;}
   const libs=(m.libraries??[]).map(l=>l.name??'').join(' '),args=JSON.stringify(m.arguments??{});
   const loader=/net\.neoforged:/.test(libs)?'neoforge':/org\.quiltmc:/.test(libs)?'quilt':/net\.fabricmc:/.test(libs)?'fabric':/net\.minecraftforge:/.test(libs)?'forge':'unknown';
-  const version=m.clientVersion||m.inheritsFrom||libs.match(/net\.fabricmc:intermediary:([\d.]+)/)?.[1]||[m.id,libs,args].join(' ').match(/\b(1\.\d+\.\d+)(?:["\s:-]|$)/)?.[1]||m.id;
+  const version=m.clientVersion||m.inheritsFrom||libs.match(/net\.fabricmc:intermediary:([\d.]+)/)?.[1]||libs.match(/net\.minecraftforge:forge:(1\.\d+(?:\.\d+)?)(?:-|\s|$)/)?.[1]||args.match(/"--fml\.mcVersion","([^"]+)"/)?.[1]||(/^1\.\d+(?:\.\d+)?$/.test(m.id)?m.id:'');
   const shared=path.basename(path.dirname(dir))==='versions'?path.dirname(path.dirname(dir)):dir;
   const ini=await fs.readFile(path.join(dir,'PCL/Setup.ini'),'utf8').catch(()=>''),setting=ini.match(/VersionArgumentIndie=(\d+)/)?.[1];
   const gameDir=setting==='0'?shared:setting==='1'||await exists(path.join(dir,'mods'))?dir:shared;

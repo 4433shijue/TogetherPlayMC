@@ -69,16 +69,48 @@ test('rejects unsafe entry and manifest paths; rejects unreasonable metadata wit
    await fs.writeFile(file,zip(data));await assert.rejects(inspectPack({file}));}
 });
 test('matches by content, reports ambiguity and differences, confirms before binding, rejects unsupported games',async t=>{
- const dir=await temp(t),a=path.join(dir,'a'),b=path.join(dir,'b');await writeTree(a,sample);await writeTree(b,sample);
+ const dir=await temp(t),a=path.join(dir,'a'),b=path.join(dir,'b'),tree={...sample,'mods/book.jar':zip({})};await writeTree(a,tree);await writeTree(b,tree);
  const profiles=[{id:'a',name:'Same',gameDir:a,loader:'forge'},{id:'b',name:'Same',gameDir:b,loader:'forge'},{id:'c',name:'Same',gameDir:a,loader:'fabric'}],{im,store}=await library(t,profiles);
  const id=await imported(im,{folder:a});assert.equal((await im.matches(id)).recommended,null);
  await writeTree(b,{[recipe]:{changed:true}});const m=await im.matches(id);assert.equal(m.recommended,'a');assert.equal(m.candidates.find(c=>c.id==='b').changed,1);assert.equal(store.get('pack-binding:a'),null);
  await im.bind(id,'a');assert.equal(store.get('pack-binding:a'),id);await assert.rejects(im.bind(id,'c'));await im.bind(id,'a',true);assert.equal(store.get('pack-binding:a'),null);
 });
-test('user-selected PCL root discovers instances without adding them before confirmation',async t=>{
- const {im,dir}=await library(t),g=path.join(dir,'versions','Example');await writeTree(g,{...sample,'Example.json':sample['version.json'],'PCL/Setup.ini':'VersionArgumentIndie=1'});const id=await imported(im,{folder:g});
+test('user-selected PCL root binds a library without creating a game profile or token',async t=>{
+ const {im,dir}=await library(t),g=path.join(dir,'versions','Example');await writeTree(g,{...sample,'mods/book.jar':zip({}),'Example.json':sample['version.json'],'PCL/Setup.ini':'VersionArgumentIndie=1'});const id=await imported(im,{folder:g});
  assert.ok((await im.matches(id)).recommended?.startsWith('scanned:'));
- const res=await im.matches(id,dir);assert.ok(res.recommended?.startsWith('scanned:'));assert.equal(im.profiles.length,0);await im.bind(id,res.recommended);assert.equal(im.profiles.length,1);assert.equal(im.list()[0].bound.length,1);
+ const res=await im.matches(id,dir);assert.ok(res.recommended?.startsWith('scanned:'));assert.equal(im.profiles.length,0);await im.bind(id,res.recommended);assert.equal(im.profiles.length,0);assert.equal(im.list()[0].bound.length,1);
+});
+test('unknown archive matches an old renamed Forge instance, survives restart and supplements without modifying the game',async t=>{
+ const {im,dir,k,store}=await library(t),launcher=path.join(dir,'launcher'),g=path.join(launcher,'周末副本'),file=path.join(dir,'share.zip');
+ const jar=zip({'assets/demo/patchouli_books/demo/zh_cn/entries/moon.json':{name:'月光手册',text:'离线资料'}}),tree={'mods/guide.jar':jar};
+ await writeTree(g,{...tree,'version.json':{inheritsFrom:'1.12.2',libraries:[{name:'net.minecraftforge:forge:1.12.2-14.23'}]}});
+ await fs.writeFile(file,zip(tree));await im.matcher.root(launcher);const id=await imported(im,{file});
+ assert.equal(k.pack(id).version,'');const m=await im.matches(id);assert.ok(m.recommended);assert.equal(m.candidates[0].canInstall,false);
+ await im.bind(id,m.recommended);await assert.rejects(im.installCandidate(id,m.recommended));assert.equal(store.get('gameProfiles'),null);
+ await writeTree(g,{[manual]:{name:'本机独有',text:'蓝莓蛋糕'}});
+ const before=await fs.readdir(g);im.supplement(id,m.recommended);await im.job.task;assert.equal(im.job.status,'ready',im.job.error);
+ assert.equal(im.search(id,'蓝莓蛋糕').length,0);assert.match(im.search(id,'蓝莓蛋糕',m.recommended)[0].source,/周末副本.*moon.json/);
+ assert.deepEqual(await fs.readdir(g),before);const again=new PackImports(k,[]);try{assert.deepEqual(again.matcher.roots(),[await fs.realpath(launcher)]);assert.ok(again.bound(id)[0].index);}finally{await again.close();}
+ await im.bind(id,m.recommended,true);assert.equal(im.bound(id).length,0);assert.throws(()=>im.search(id,'月光',m.recommended));assert.ok(im.search(id,'月光').length);
+ await im.matcher.root(launcher,true);assert.deepEqual((await im.matches(id)).candidates,[]);
+});
+test('unknown loose folders, zero-evidence manifests and config-only hits are never auto-selected',async t=>{
+ const {im,dir}=await library(t),game=path.join(dir,'Loose'),archive=path.join(dir,'pack.zip');
+ await writeTree(game,{[manual]:{name:'内容'}});await im.matcher.root(game);
+ for(const tree of [{[manual]:{name:'内容'}},{'manifest.json':{manifestType:'minecraftModpack',manifestVersion:1,files:[{projectID:1,fileID:2}]}}]){
+   await fs.writeFile(archive,zip(tree));const id=await imported(im,{file:archive}),m=await im.matches(id);assert.equal(m.recommended,null);assert.equal(m.candidates[0].level,'possible');
+   assert.equal(m.candidates[0].version,'');assert.equal(m.candidates[0].canInstall,false);
+ }
+});
+test('a broken version descriptor does not discard readable manuals or invent a Minecraft version',async t=>{
+ const dir=await temp(t),file=path.join(dir,'unknown.zip');await fs.writeFile(file,zip({'version.json':'{',[manual]:{name:'Moon journal'}}));
+ const {pack,docs}=await inspectPack({file});assert.equal(pack.version,'');assert.equal(pack.loader,'unknown');assert.ok(pack.warnings.some(s=>s.includes('version.json')));assert.equal(docs[0].title,'Moon journal');
+});
+test('a launcher instance with separate component metadata resolves its game folder',async t=>{
+ const {im,dir}=await library(t),root=path.join(dir,'instances','Renamed'),data=path.join(root,'.minecraft'),jar=zip({}),file=path.join(dir,'game.zip');
+ await writeTree(root,{'mmc-pack.json':{components:[{uid:'net.minecraft',version:'1.12.2'},{uid:'net.minecraftforge',version:'14.23'}]}});
+ await writeTree(data,{'mods/a.jar':jar});await fs.writeFile(file,zip({'mods/a.jar':jar}));await im.matcher.root(root);
+ const result=await im.matches(await imported(im,{file})),c=result.candidates[0];assert.equal(c.version,'1.12.2');assert.equal(c.loader,'forge');assert.equal(c.path,await fs.realpath(data));assert.equal(result.recommended,c.id);assert.equal(c.canInstall,false);
 });
 test('mixed loader dependencies cannot make Quilt or NeoForge look like a supported instance',async t=>{
  const root=await temp(t);

@@ -1,18 +1,17 @@
 import fs from 'node:fs/promises';
-import {createReadStream,createWriteStream} from 'node:fs';
+import {createWriteStream} from 'node:fs';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {fork} from 'node:child_process';
 import {archiveName} from './archive-stream.mjs';
 import {gameTarget,sameTarget} from './game-versions.mjs';
+import {PackMatcher,pathKey} from './pack-matcher.mjs';
 import {pipeline} from 'node:stream/promises';
-import {archiveLimit,folderFiles} from './pack-reader.mjs';
-import {scanGames,validateGame} from './game-profiles.mjs';
+import {archiveLimit} from './pack-reader.mjs';
 import {pairProfile,publicProfile} from './companion-install.mjs';
 import {work} from './paths.mjs';
 
 const pause=()=>new Promise(r=>setImmediate(r));
-const supported=p=>Boolean(gameTarget(p.version,p.loader));
 const active=s=>['waiting','uploading','reading','saving'].includes(s);
 async function importScratch(directory,bytes){
   // Leave headroom for the index. Prefer user data; portable installs may be on a larger drive.
@@ -26,19 +25,26 @@ async function importScratch(directory,bytes){
 }
 export class PackImports{
   constructor(knowledge,profiles){
-    this.k=knowledge;this.store=knowledge.store;this.profiles=profiles;this.hashes=new Map();this.scanned=new Map();
+    this.k=knowledge;this.store=knowledge.store;this.profiles=profiles;this.matcher=new PackMatcher(knowledge,profiles);
     for(const {pack} of this.k.db.prepare("SELECT DISTINCT pack FROM companion_documents WHERE pack LIKE 'import-stage:%'").all())this.discard(pack);
   }
   discard(id){const db=this.k.db;db.exec('BEGIN');try{for(const d of db.prepare('SELECT id FROM companion_documents WHERE pack=?').all(id))this.k.remove(id,d.id);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}}
-  list(){return this.k.packs().filter(p=>p.id.startsWith('archive:')).map(p=>({...p,bound:this.profiles.filter(f=>this.store.get('pack-binding:'+f.id)===p.id).map(f=>({id:f.id,name:f.name}))}));}
-  state(){const j=this.job;return {packs:this.list(),job:j?{id:j.id,status:j.status,done:j.done,total:j.total,pack:j.pack,error:j.error}:null};}
+  links(){return this.store.get('pack-instance-links',[]);}
+  bound(pack){
+    const links=this.links().filter(b=>b.pack===pack);
+    for(const p of this.profiles)if(this.store.get('pack-binding:'+p.id)===pack&&!links.some(b=>b.id===p.id||pathKey(p.gameDir)===pathKey(b.path)))
+      links.push({pack,id:p.id,name:p.name,path:p.gameDir,version:p.version,loader:p.loader,canInstall:Boolean(gameTarget(p.version??(['elements146','vanilla1201'].includes(p.id)?'1.20.1':''),p.loader))});
+    return links;
+  }
+  list(){return this.k.packs().filter(p=>p.id.startsWith('archive:')).map(p=>({...p,bound:this.bound(p.id)}));}
+  state(){const j=this.job;return {roots:this.matcher.roots(),packs:this.list(),job:j?{id:j.id,status:j.status,done:j.done,total:j.total,pack:j.pack,error:j.error}:null};}
   start({file,folder,profileId,name}){
     if(active(this.job?.status))throw Error('已有导入任务，请先等待或取消。');
     const p=this.profiles.find(p=>profileId?p.id===profileId:typeof folder==='string'&&path.resolve(folder).toLowerCase()===path.resolve(p.gameDir).toLowerCase());if(profileId&&!p)throw Error('游戏实例不存在。');
     if(p){folder=p.gameDir;name=p.name;}
     if(file&&folder||file&&!archiveName.test(file)||[file,folder].some(v=>v&&!path.isAbsolute(v)))throw Error('请选择 ZIP、MRPACK、7Z、RAR、TAR 压缩包或游戏文件夹。');
     const j=this.job={id:randomUUID(),status:'waiting',done:0,total:0,name:path.basename(String(name||file||folder||'整合包')).slice(0,180),controller:new AbortController()};
-    if(file||folder)this.run(j,{file,folder,name:j.name,profile:p?{loader:p.loader,version:p.version??'1.20.1'}:undefined});
+    if(file||folder)this.run(j,{file,folder,name:j.name,profile:p?{loader:p.loader,version:p.version}:undefined});
     else{j.timer=setTimeout(()=>this.cancel(j.id),120000);j.timer.unref();}
     return {id:j.id};
   }
@@ -47,6 +53,7 @@ export class PackImports{
     j.task=(async()=>{
       let tmp;const signal=j.controller.signal,stage='import-stage:'+j.id;
       try{
+        if(input.supplement&&pathKey(await fs.realpath(input.folder))!==pathKey(input.folder))throw Error('实例目录已变化，请重新确认关联。');
         const size=upload?Number(upload.headers['content-length'])||0:input.file?(await fs.stat(input.file)).size:0;
         tmp=await importScratch(this.store.directory,size*(upload?2:1));input.scratch=tmp;
         if(upload){
@@ -62,6 +69,7 @@ export class PackImports{
           worker.send(input);
         });
         signal.throwIfAborted();const {docs,pack,facts}=data;
+        if(input.supplement)pack.id='instance-index:'+pack.id.slice(8);
         if(!this.k.pack(pack.id)){
           // Keep unfinished batches out of search. Publish the complete index and its facts atomically.
           j.status='saving';j.done=0;j.total=docs.length;
@@ -74,57 +82,62 @@ export class PackImports{
             this.store.set('pack-facts:'+pack.id,facts);this.k.savePack({...pack,documents:docs.length,updated:new Date().toISOString()});this.k.db.exec('COMMIT');
           }catch(e){this.k.db.exec('ROLLBACK');throw e;}
         }
-        if(input.folder&&!input.profile)this.store.set('pack-import-folder:'+pack.id,input.folder);
-        j.pack=pack.id;j.status='ready';
+        if(input.supplement){
+          const links=this.links(),link=links.find(b=>b.pack===input.supplement.pack&&b.id===input.supplement.id);
+          if(!link)throw Error('关联已解除，未挂入补全资料。');
+          link.index=pack.id;this.store.set('pack-instance-links',links);j.pack=link.pack;
+        }else{
+          if(input.folder&&!input.profile)this.store.set('pack-import-folder:'+pack.id,await fs.realpath(input.folder));
+          j.pack=pack.id;void this.matcher.matches(pack.id).catch(()=>{});
+        }
+        j.status='ready';
       }catch(e){j.status=signal.aborted?'cancelled':'error';j.error=signal.aborted?'导入已取消。':/ENOSPC/.test(e.message)?'资料库所在磁盘空间不足。请释放空间，或选择已解压的游戏文件夹。':String(e.message).slice(0,350);}
       finally{this.discard(stage);if(tmp)await fs.rm(tmp,{recursive:true,force:true,maxRetries:3});}
     })();return j.task;
   }
   async upload(id,req){const j=this.job;if(!j||j.id!==id||j.status!=='waiting')throw Error('上传任务无效。');if(Number(req.headers['content-length'])>archiveLimit){this.cancel(id);throw Error('压缩包超过 4 GiB。');}j.total=Number(req.headers['content-length'])||0;await this.run(j,{name:j.name},req);return this.state();}
   cancel(id){const j=this.job;if(j?.id!==id||!active(j.status))return;clearTimeout(j.timer);j.controller.abort();if(!j.task)j.status='cancelled';}
-  async matches(id,searchRoot){
-    const p=this.k.pack(id);if(!id?.startsWith('archive:')||!p)throw Error('找不到导入的资料包。');
-    const facts=this.store.get('pack-facts:'+id,{}),rows=[];
-    const knownRoot=searchRoot||(!this.scanned.has(id)&&this.store.get('pack-import-folder:'+id));
-    if(knownRoot){
-      let found;try{found=await scanGames(knownRoot);}catch(e){if(searchRoot)throw e;found=[];}
-      const scanned=[];
-      for(const p of found){const key=createHash('sha256').update(p.versionDir).digest('hex').slice(0,24);scanned.push({...p,id:'scanned:'+key});}
-      this.scanned.set(id,scanned);
+  async matches(id,root,useRecent=false){if(root)await this.matcher.root(root);return this.matcher.matches(id,useRecent);}
+  async bind(pack,id,unbind=false){
+    if(unbind){
+      const links=this.links();
+      const b=this.bound(pack).find(x=>x.id===id);if(!b)throw Error('关联已变化，请刷新。');
+      for(const p of this.profiles)if((p.id===id||pathKey(p.gameDir)===pathKey(b.path))&&this.store.get('pack-binding:'+p.id)===pack)this.store.set('pack-binding:'+p.id,null);
+      this.store.set('pack-instance-links',links.filter(x=>x.pack!==pack||x.id!==id));
+    }else{
+      const c=(await this.matches(pack)).candidates.find(x=>x.id===id&&x.level!=='incompatible');if(!c)throw Error('该实例不能关联这个资料包。');
+      const links=this.links(),already=links.find(b=>b.pack===pack&&b.id===id);
+      this.store.set('pack-instance-links',[...links.filter(b=>b.id!==id&&!(pathKey(b.path)===pathKey(c.path)&&b.version===c.version&&b.loader===c.loader)),{pack,id,path:c.path,name:c.name,version:c.version,loader:c.loader,canInstall:c.canInstall,index:already?.index}]);
+      if(this.profiles.some(p=>p.id===id))this.store.set('pack-binding:'+id,pack);
     }
-    const candidates=this.profiles.concat((this.scanned.get(id)??[]).filter(p=>!this.profiles.some(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase()&&sameTarget(f,p))));
-    for(const f of candidates){
-      const r={id:f.id,name:f.name,path:f.gameDir,matched:0,missing:0,changed:0,extra:0,differences:[],level:'incompatible'},examples=s=>{if(r.differences.length<5)r.differences.push(s);};
-      rows.push(r);if(!supported(p)||(f.version??'1.20.1')!==p.version||f.loader!==p.loader){examples('游戏版本或加载器不匹配');continue;}
-      let root;try{root=await fs.realpath(f.gameDir);}catch{examples('实例目录不存在');continue;}
-      let local;try{local=await folderFiles(root);}catch(e){examples('无法核对目录：'+e.message);continue;}
-      for(const [rel,hash] of Object.entries(facts)){
-        const file=path.join(root,rel);let stat;try{
-          const actual=await fs.realpath(file);const sub=path.relative(root,actual);
-          if(sub.startsWith('..'+path.sep)||sub==='..'||path.isAbsolute(sub))throw Error();
-          stat=await fs.stat(actual);if(!stat.isFile()||stat.size>512*1024**2)throw Error();
-          const cached=this.hashes.get(actual),stamp=[stat.size,stat.mtimeMs,stat.ctimeMs].join(':');let value=cached?.value;
-          if(cached?.stamp!==stamp){const h=createHash('sha512');for await(const b of createReadStream(actual))h.update(b);value=h.digest('hex');if(this.hashes.size>30000)this.hashes.clear();this.hashes.set(actual,{stamp,value});}
-          if(value===hash)r.matched++;else{r.changed++;examples('已修改：'+rel);}
-        }catch{r.missing++;examples('缺失或不可读取：'+rel);}
-      }
-      for(const n of local.keys())if((/^mods\/.*\.jar$/i.test(n)||!['modrinth','curseforge'].includes(p.format)&&n.includes('/'))&&!Object.hasOwn(facts,n)){r.extra++;examples('实例另有：'+n);}
-      r.level=r.matched&&!r.missing&&!r.changed&&!r.extra&&!p.warnings.length&&!(p.format==='curseforge'&&p.declared)?'high':'possible';
-    }
-    rows.sort((a,b)=>({high:2,possible:1,incompatible:0}[b.level]-{high:2,possible:1,incompatible:0}[a.level])||b.matched-a.matched);
-    return {candidates:rows,recommended:rows.filter(r=>r.level==='high').length===1?rows.find(r=>r.level==='high').id:null};
+    return this.state();
   }
-  async bind(pack,profileId,unbind=false){
-    if(unbind){if(this.store.get('pack-binding:'+profileId)!==pack)throw Error('绑定已变化，请刷新。');}
-    else if(!(await this.matches(pack)).candidates.some(r=>r.id===profileId&&r.level!=='incompatible'))throw Error('该实例不能绑定这个资料包。');
-    if(!unbind&&profileId.startsWith('scanned:')){
-      const chosen=(this.scanned.get(pack)??[]).find(f=>f.id===profileId),p=await validateGame(chosen);
-      const existing=this.profiles.find(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase());if(existing&&!sameTarget(existing,p))throw Error('这个共用目录已关联其他版本或加载器，请先核对实例隔离设置。');
-      if(!existing){this.profiles.push(pairProfile(this.store,p));this.store.set('gameProfiles',this.profiles.map(publicProfile));}
-      profileId=existing?.id??p.id;
-    }
-    if(!this.profiles.some(f=>f.id===profileId))throw Error('实例不存在。');
-    this.store.set('pack-binding:'+profileId,unbind?null:pack);return this.state();
+  supplement(pack,id){
+    if(active(this.job?.status))throw Error('请等待当前资料任务完成。');
+    const b=this.bound(pack).find(x=>x.id===id);if(!b)throw Error('请先确认关联。');
+    if(!this.links().some(x=>x.id===id&&x.pack===pack))this.store.set('pack-instance-links',[...this.links(),b]);
+    const j=this.job={id:randomUUID(),done:0,total:0,controller:new AbortController()};
+    this.run(j,{folder:b.path,name:b.name,supplement:{pack,id},profile:{version:b.version,loader:b.loader}});return {id:j.id};
   }
-  async close(){if(this.job){this.cancel(this.job.id);await this.job.task;}}
+  search(pack,query,instance){
+    if(!pack?.startsWith('archive:')||!this.k.pack(pack))throw Error('资料包不存在。');
+    const opts={spoilers:true,staticOnly:true},q=String(query??'').slice(0,400);
+    if(!instance)return this.k.search(pack,q,opts);
+    const b=this.bound(pack).find(x=>x.id===instance);if(!b?.index)throw Error('该实例还没有可查询的补全资料。');
+    return this.k.search(b.index,q,opts).map(d=>({...d,source:'本机实例「'+b.name+'」：'+d.source}));
+  }
+  async installCandidate(pack,id){
+    const link=this.bound(pack).find(b=>b.id===id);if(!link)throw Error('请先确认资料关联。');
+    const c=(await this.matches(pack)).candidates.find(x=>pathKey(x.path)===pathKey(link.path)&&x.level!=='incompatible'&&x.canInstall&&x.loader===link.loader&&x.version===link.version);
+    if(!c)throw Error('无法确认这个实例可以安装伙伴，请重新核对目录。');
+    const existing=this.profiles.find(f=>pathKey(f.gameDir)===pathKey(c.path));if(existing&&!sameTarget(existing,c))throw Error('不同游戏版本或加载器共用目录，请先隔离实例。');
+    if(existing)return existing;
+    const profile={id:'game-'+createHash('sha256').update(pathKey(c.path)).digest('hex').slice(0,16),gameDir:c.path,name:c.name,version:c.version,loader:c.loader};
+    return pairProfile(this.store,profile);
+  }
+  installed(pack,id,p){
+    if(!this.profiles.some(f=>f.id===p.id)){this.profiles.push(p);this.store.set('gameProfiles',this.profiles.map(publicProfile));}
+    this.store.set('pack-binding:'+p.id,pack);
+  }
+  async close(){if(this.job){this.cancel(this.job.id);await this.job.task;}await this.matcher.close();}
 }
