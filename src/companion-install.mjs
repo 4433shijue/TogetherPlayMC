@@ -3,7 +3,7 @@ import path from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {root,runtime} from './paths.mjs';
 import {assertGamesClosed} from './game-profiles.mjs';
-import {gameTarget,companionJar} from './game-versions.mjs';
+import {gameTarget,companionJar,managedCompanion} from './game-versions.mjs';
 import yauzl from 'yauzl';
 
 export async function configuredProfiles(store){
@@ -60,7 +60,7 @@ export async function installProfile(profile,{endpoint,directory,dist=path.join(
   await fs.mkdir(backup,{recursive:true});const changes=[];
   const preserve=async file=>{try{await fs.copyFile(file,path.join(backup,path.basename(file)));return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}};
   // Only this project's previous artifacts are retired. Other mods and saves are untouched.
-  for(const old of await fs.readdir(mods))if(/^together-companion-(?:fabric|forge)-1\.(?:20|21)\.1-[\d.]+\.jar$/.test(old)||old==='togetherplay-bridge.jar'){
+  for(const old of await fs.readdir(mods))if(managedCompanion(old)||old==='togetherplay-bridge.jar'){
     await preserve(path.join(mods,old));changes.push(old);
   }
   const configFile=path.join(cfg,'together-companion.json');await preserve(configFile);
@@ -91,7 +91,7 @@ export async function restoreProfile(manifest){
  const game=manifest.profile.gameDir,jar=path.join(game,'mods',manifest.installed);
  if(!/^together-companion-.*\.jar$/.test(manifest.installed))throw Error('备份记录无效。');
  // Read every backup before changing the installed files; incomplete backups cannot erase a working mod.
- const names=(await fs.readdir(backup)).filter(name=>/^together-companion-(?:fabric|forge)-.*\.jar$/.test(name)||name==='togetherplay-bridge.jar');
+ const names=(await fs.readdir(backup)).filter(name=>managedCompanion(name)||name==='togetherplay-bridge.jar');
  const jars=await Promise.all(names.map(async name=>({name,bytes:await fs.readFile(path.join(backup,name))})));
  for(const name of manifest.replaced??[])if(!names.includes(name))throw Error('安装备份不完整，已保留当前伙伴。');
  await fs.unlink(jar).catch(e=>{if(e.code!=='ENOENT')throw e;});

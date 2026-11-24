@@ -6,9 +6,9 @@
 
 ## 模组
 
-将 `JAVA_HOME` 指向 Java 17、`JAVA21_HOME` 指向 Java 21，再执行 `node scripts/build-companion.mjs`。脚本下载并校验 Gradle 8.7，构建 1.20.1 Fabric / Forge 和 1.21.1 Fabric 三份模组。无需提供个人 `config/experiment.json`；旧本地配置的 Java 路径仅作为兼容回退。
+将 `JAVA_HOME` 指向 Java 17、`JAVA21_HOME` 指向 Java 21，再执行 `node scripts/build-companion.mjs`。脚本为原有三种目标使用 Gradle 8.7，为 1.21.1 NeoForge 预览模组使用 Gradle 8.14.3。无需提供个人 `config/experiment.json`；旧本地配置的 Java 路径仅作为兼容回退。
 
-共享代码在 `companion-mod/common`，两种加载器入口分别在 `fabric` 和 `forge`。资源由 `build-orb-faces.mjs` 从本项目定义生成，网页与游戏共用形态目录。
+共享代码在 `companion-mod/common`，1.21.1 的版本差异放在 `common1211`，加载器入口分别在 `fabric`、`forge` 和 `neoforge1211`。资源由 `build-orb-faces.mjs` 从本项目定义生成，网页与游戏共用形态目录。
 
 ## 本机语义模型
 
@@ -20,7 +20,7 @@
 
 - Node.js Windows x64 运行时，放在 `runtime/node/node.exe`。
 - `npm ci` 及 `npm --prefix desktop ci` 安装的依赖和 Electron。
-- 三种模组构建结果，位于 `artifacts/mods`。
+- 四种模组构建结果（含独立的 NeoForge 预览 JAR），位于 `artifacts/mods`。
 - Fabric API 0.92.2+1.20.1 和 0.116.1+1.21.1，位于 `runtime/cache`。
 - 已校验的语义模型，位于 `runtime/models`。
 - 对应版本的说明、验收记录、合成测试截图，以及第三方许可证。

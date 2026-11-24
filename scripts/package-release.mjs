@@ -7,14 +7,14 @@ import {createHash} from 'node:crypto';
 import {root} from '../src/paths.mjs';
 const out=path.join(root,'dist','v'+appVersion),stage=path.join(out,'TogetherPlayMC');await fs.mkdir(stage,{recursive:true});
 const copy=async(from,to=from)=>{await fs.mkdir(path.dirname(path.join(stage,to)),{recursive:true});await fs.cp(path.join(root,from),path.join(stage,to),{recursive:true,filter:p=>!/[\\/]\.cache([\\/]|$)/.test(p)&&!/[\\/]onnxruntime-node[\\/]bin[\\/]napi-v3[\\/](darwin|linux|win32[\\/](arm64|ia32))([\\/]|$)/.test(p)});};
-for(const name of ['src','web','package.json','package-lock.json','start-together.cmd','README.md','CREDITS.md','LICENSE.md','THIRD_PARTY_NOTICES.md','third-party-licenses'])await copy(name);
+for(const name of ['src','web','package.json','package-lock.json','start-together.cmd','start-neoforge-preview.cmd','README.md','CREDITS.md','LICENSE.md','THIRD_PARTY_NOTICES.md','third-party-licenses'])await copy(name);
 if(!process.argv.includes('--refresh'))await copy('node_modules');
 else for(const pkg of ['koffi','@koromix/koffi-win32-x64'])await copy('node_modules/'+pkg);
 for(const name of ['prepare-companion.mjs','prepare-vanilla.mjs','apply-update.mjs','rollback-update.mjs','local-voice.ps1'])await copy('scripts/'+name);
 await copy('runtime/node/node.exe');for(const t of gameTargets.filter(t=>t.api))await copy('runtime/cache/fabric-api-'+t.api+'.jar');
 await copy('runtime/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2');
 await copy('docs/cache-open-source-review.md','cache-open-source-review.md');
-for(const name of ['compatibility.md','development.md',docTag+'-release-notes.md',docTag+'-acceptance.md','cache-open-source-review.md','memory-context-open-source-review.md'])await copy('docs/'+name);
+for(const name of ['compatibility.md','development.md','2026-11-24-modpacks.md',docTag+'-release-notes.md',docTag+'-acceptance.md','cache-open-source-review.md','memory-context-open-source-review.md'])await copy('docs/'+name);
 await copy('docs/screenshots/'+docTag,'docs/screenshots/'+docTag);
 for(const t of gameTargets)await copy('artifacts/mods/'+companionJar(t));
 if(!process.argv.includes('--refresh')){await fs.cp(path.join(root,'desktop/node_modules/electron/dist'),stage,{recursive:true});await fs.rename(path.join(stage,'electron.exe'),path.join(stage,'TogetherPlayMC.exe'));}

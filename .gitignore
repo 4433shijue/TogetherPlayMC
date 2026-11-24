@@ -9,6 +9,7 @@
 !/package.json
 !/package-lock.json
 !/start-together.cmd
+!/start-neoforge-preview.cmd
 !/src/
 !/web/
 !/tests/
@@ -63,6 +64,7 @@
 !/docs/memory-context-open-source-review.md
 !/docs/compatibility.md
 !/docs/pack-import-acceptance.md
+!/docs/2026-11-24-modpacks.md
 !/docs/development.md
 !/docs/screenshots/
 /docs/screenshots/*

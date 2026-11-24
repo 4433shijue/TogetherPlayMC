@@ -1,0 +1,15 @@
+plugins { id 'net.neoforged.moddev' version '2.0.107' }
+base { archivesName = 'together-companion-neoforge-1.21.1' }
+neoForge {
+    version = '21.1.217'
+    runs { client { client() } }
+    mods { together_companion { sourceSet sourceSets.main } }
+}
+def overlay = tasks.register('prepareVersionSources', Sync) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from 'src/main/java'
+    from '../common1211/src/main/java'
+    from '../common/src/main/java'
+    into layout.buildDirectory.dir('generated/version-sources')
+}
+sourceSets.main.java.setSrcDirs([overlay])

@@ -11,6 +11,7 @@ dependencies {
 def overlay = tasks.register('prepareVersionSources', Sync) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from 'src/main/java'
+    from '../common1211/src/main/java'
     from '../fabric/src/main/java'
     from '../common/src/main/java'
     into layout.buildDirectory.dir('generated/version-sources')

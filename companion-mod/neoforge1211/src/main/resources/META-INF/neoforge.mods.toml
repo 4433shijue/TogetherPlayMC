@@ -1,0 +1,20 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+[[mods]]
+modId="together_companion"
+version="0.6.0"
+displayName="Together Companion"
+description='''Private singleplayer conversation and a client-side companion orb.'''
+[[dependencies.together_companion]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="CLIENT"
+[[dependencies.together_companion]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,21.2)"
+ordering="NONE"
+side="CLIENT"

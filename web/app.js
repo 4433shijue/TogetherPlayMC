@@ -144,7 +144,7 @@ function renderCompanion(){
   $('toggle-proactive').textContent=role?.chatter==='quiet'?'开启主动说话':'关闭主动说话';
   const data=state.companion??{},key=JSON.stringify(data);if(key===companionProfilesKey)return;companionProfilesKey=key;
   $('companion-profiles').replaceChildren(...(data.profiles??[]).map(profile=>{
-    const card=element('div',undefined,'profile-card'),knowledge=(data.knowledge??[]).find(k=>k.id===profile.id);card.append(element('h4',profile.name),element('p',(profile.loader==='forge'?'Forge':'Fabric')+' · '+(profile.version??'1.20.1'),'small'));
+    const card=element('div',undefined,'profile-card'),knowledge=(data.knowledge??[]).find(k=>k.id===profile.id);card.append(element('h4',profile.name),element('p',({forge:'Forge',fabric:'Fabric',neoforge:'NeoForge'}[profile.loader]??profile.loader)+' · '+(profile.version??'1.20.1'),'small'));
     const statuses={indexing:'正在整理',ready:'基础资料已就绪',cancelled:'已暂停整理',error:'整理遇到问题'};
     card.append(element('p',knowledge?(statuses[knowledge.status]??knowledge.status)+' · '+knowledge.progress+'% · '+knowledge.documents+' 条资料':'首次安装后建立资料库','small'));
     if(knowledge)card.append(element('p','实际配方：'+({ready:'已同步',indexing:'同步中',waiting:'进入世界后读取'}[knowledge.runtime]??knowledge.runtime),'small'));

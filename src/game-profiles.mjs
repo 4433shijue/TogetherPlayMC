@@ -26,7 +26,7 @@ export async function scanGames(input){
 }
 export async function validateGame(b){
  const candidates=await scanGames(b.versionDir),p=candidates.find(p=>p.versionDir===path.resolve(b.versionDir));
- if(!p?.supported)throw Error('游戏内伙伴支持 1.20.1 Fabric / Forge 和 1.21.1 Fabric。');
+ if(!p?.supported)throw Error('这个版本与加载器不支持安装伙伴。1.21.1 NeoForge 需使用开发版预览入口。');
  const chosen=await fs.realpath(b.gameDir);if(![p.versionDir,p.sharedDir].includes(chosen))throw Error('实际游戏目录必须是该版本目录或其 .minecraft 目录。');
  return {id:'game-'+createHash('sha256').update(chosen.toLowerCase()).digest('hex').slice(0,16),name:String(b.name||p.name).slice(0,100),loader:p.loader,gameDir:chosen,versionDir:p.versionDir,version:p.version};
 }

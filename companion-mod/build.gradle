@@ -5,7 +5,7 @@ allprojects {
 }
 subprojects {
     apply plugin: 'java'
-    def targetJava = project.name == 'fabric1211' ? 21 : 17
+    def targetJava = project.name.endsWith('1211') ? 21 : 17
     java { sourceCompatibility = JavaVersion.toVersion(targetJava); targetCompatibility = JavaVersion.toVersion(targetJava) }
     tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = targetJava }
     sourceSets.main.java.srcDir '../common/src/main/java'

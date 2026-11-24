@@ -1,6 +1,6 @@
 # 适配范围
 
-正式版 0.16.0 支持 Windows x64、Minecraft Java 1.20.1 Fabric / Forge 单人世界。开发版新增 1.21.1 Fabric，不包括 1.21.1 Forge、NeoForge 或 Quilt。
+正式版 0.16.0 支持 Windows x64、Minecraft Java 1.20.1 Fabric / Forge 单人世界。开发版新增 1.21.1 Fabric，另有 [1.21.1 NeoForge 实验入口与验收边界](2026-11-24-modpacks.md)，默认关闭。1.21.1 Forge 与 Quilt 不支持。
 
 开发版的「本地整合包资料库」可在没有游戏实例时独立使用。读取 Modrinth、CurseForge 清单或普通游戏目录压缩包不等于支持在该版本中安装伙伴。导入不会启动游戏、执行脚本或下载清单中的文件。[导入与匹配验收](pack-import-acceptance.md)
 

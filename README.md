@@ -4,7 +4,7 @@
 
 **Windows · Minecraft Java 1.20.1 · 单人世界 · 当前版本 0.16.0**
 
-[下载 Windows 完整版](https://github.com/4433shijue/TogetherPlayMC/releases/latest) · [更新说明](docs/v016-release-notes.md) · [开源项目与整合包致谢](CREDITS.md) · [适配范围](docs/compatibility.md)
+[下载 Windows 完整版](https://github.com/4433shijue/TogetherPlayMC/releases/latest) · [正式版更新说明](docs/v016-release-notes.md) · [开发版更新：整合包与 NeoForge](docs/2026-11-24-modpacks.md) · [开源项目与整合包致谢](CREDITS.md) · [适配范围](docs/compatibility.md)
 
 ## 已有功能
 
@@ -27,7 +27,7 @@
 
 需要自己的 Minecraft、Java 17、游戏加载器和模型接口。发行包不提供 Minecraft、启动器或整合包。模型接口可能收费，缓存收益以供应商回执与账单为准。
 
-开发版还支持 Minecraft 1.21.1 Fabric（Java 21）。1.20.1 Fabric / Forge 仍使用 Java 17。控制台按游戏版本和加载器选模组；1.21.1 Forge / NeoForge 不在支持范围内。
+开发版还支持 Minecraft 1.21.1 Fabric（Java 21）。1.20.1 Fabric / Forge 仍使用 Java 17。控制台按游戏版本和加载器选模组；1.21.1 NeoForge 提供独立的开发版试用入口，尚未列入正式支持；1.21.1 Forge 不支持。
 
 常用按键：T 原生聊天；F8 伙伴面板；F7 取消回复与语音；F9 截图；启用语音后 F6 按住说话。冲突时可在游戏按键设置中调整。
 
