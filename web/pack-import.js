@@ -4,6 +4,7 @@ export function setupPackImport({getState,api,run,el,btn}){
  const panel=el('article');panel.id='pack-library';
 panel.innerHTML='<h3>本地整合包资料库</h3><div class="buttons"><label class="pack-picker">选择或拖入整合包<input id="pack-file" type="file" accept=".zip,.mrpack,.7z,.rar,.tar,.tar.gz,.tar.xz,.tar.bz2,.tgz,.txz,.tbz,.tbz2"></label><button id="pack-folder" type="button">导入游戏文件夹</button></div><form id="pack-path-form" hidden><label>游戏实例文件夹<input id="pack-path" required placeholder="包含 mods 或配置的目录"></label><button>读取文件夹</button></form><p id="pack-status" role="status"></p><button id="pack-cancel" hidden>取消导入</button><label id="pack-select-label" hidden>资料包<select id="pack-select"></select></label><div id="pack-detail"></div>';
  $('page-connect').insertBefore(panel,$('diagnosis-list'));
+ const guide=el('a','新整合包怎么装伙伴？');guide.href='/help.html#modpack';panel.querySelector('.buttons').append(guide);
  const folders=el('details'),summary=el('summary','匹配目录'),rootsBox=el('div'),rootForm=el('form'),rootInput=el('input');
  rootInput.required=true;rootInput.placeholder='启动器或游戏实例的完整路径';rootInput.setAttribute('aria-label','匹配目录路径');
  const remember=async root=>{if(root){await call('remember-root',{root});rootInput.value='';await load();}};
