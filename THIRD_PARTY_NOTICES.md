@@ -33,6 +33,7 @@ Windows 包保留未修改的 @img/sharp-win32-x64/lib/libvips-42.dll 与 libvip
 | @img/colour | 1.1.0 | MIT | [上游](https://github.com/lovell/colour) | [随附许可](third-party-licenses/npm/@img__colour-1.1.0/) |
 | @img/sharp-win32-x64 | 0.34.5 | Apache-2.0 AND LGPL-3.0-or-later | [上游](https://github.com/lovell/sharp) | [随附许可](third-party-licenses/npm/@img__sharp-win32-x64-0.34.5/) |
 | @isaacs/fs-minipass | 4.0.1 | ISC | [上游](https://github.com/npm/fs-minipass) | [随附许可](third-party-licenses/npm/@isaacs__fs-minipass-4.0.1/) |
+| @koromix/koffi-win32-x64 | 3.3.8 | MIT | [上游](https://github.com/Koromix/koffi) | 见包内声明与上游 |
 | @protobufjs/aspromise | 1.1.2 | BSD-3-Clause | [上游](https://github.com/dcodeIO/protobuf.js) | [随附许可](third-party-licenses/npm/@protobufjs__aspromise-1.1.2/) |
 | @protobufjs/base64 | 1.1.2 | BSD-3-Clause | [上游](https://github.com/dcodeIO/protobuf.js) | [随附许可](third-party-licenses/npm/@protobufjs__base64-1.1.2/) |
 | @protobufjs/codegen | 2.0.5 | BSD-3-Clause | [上游](https://github.com/dcodeIO/protobuf.js) | [随附许可](third-party-licenses/npm/@protobufjs__codegen-2.0.5/) |
@@ -86,6 +87,7 @@ Windows 包保留未修改的 @img/sharp-win32-x64/lib/libvips-42.dll 与 libvip
 | jsonwebtoken | 9.0.3 | MIT | [上游](https://github.com/auth0/node-jsonwebtoken) | [随附许可](third-party-licenses/npm/jsonwebtoken-9.0.3/) |
 | jwa | 2.0.1 | MIT | [上游](https://github.com/brianloveswords/node-jwa) | [随附许可](third-party-licenses/npm/jwa-2.0.1/) |
 | jws | 4.0.1 | MIT | [上游](https://github.com/brianloveswords/node-jws) | [随附许可](third-party-licenses/npm/jws-4.0.1/) |
+| koffi | 3.3.8 | MIT | [上游](https://github.com/Koromix/koffi) | [随附许可](third-party-licenses/npm/koffi-3.3.8/) |
 | lodash.includes | 4.3.0 | MIT | [上游](https://github.com/lodash/lodash) | [随附许可](third-party-licenses/npm/lodash.includes-4.3.0/) |
 | lodash.isboolean | 3.0.3 | MIT | [上游](https://github.com/lodash/lodash) | [随附许可](third-party-licenses/npm/lodash.isboolean-3.0.3/) |
 | lodash.isinteger | 4.0.4 | MIT | [上游](https://github.com/lodash/lodash) | [随附许可](third-party-licenses/npm/lodash.isinteger-4.0.4/) |

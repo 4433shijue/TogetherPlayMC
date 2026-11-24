@@ -76,7 +76,7 @@ public final class AppearanceScreen extends Screen {
             if(owner.equals(c.roleId)){c.config.appearance(saved);c.config.personality(savedRole.getAsJsonObject("personality"));c.config.chatter=chatter;c.config.save();}if(minecraft.screen==this)minecraft.setScreen(parent);
         });
     }
-    @Override public void tick(){for(EditBox field:fields)field.tick();if(saving&&System.currentTimeMillis()-saveStarted>8000){saving=false;c.cancelRequest(requestId);error="保存尚未确认，请检查连接后重试。";rebuild();}}
+    @Override public void tick(){for(EditBox field:fields)GameVersion.tick(field);if(saving&&System.currentTimeMillis()-saveStarted>8000){saving=false;c.cancelRequest(requestId);error="保存尚未确认，请检查连接后重试。";rebuild();}}
     @Override public void render(GuiGraphics g,int mx,int my,float pt){
         g.fill(0,0,width,height,0xF01B2929);int x=left(),cw=controls(),pw=span()-cw-12,px=x+cw+12;g.drawString(font,title,x,18,0xB8E8D2);
         if(page==1&&section<2){int first=section==0?0:6,length=section==0?6:5,count=Math.max(2,(height-188)/34*2),start=slice*count;for(int i=start;i<Math.min(length,start+count);i++){int at=i-start;g.drawString(font,LABELS[first+i],x+(at%2)*((cw-6)/2+6),104+(at/2)*34,0xDDE8E0);}}

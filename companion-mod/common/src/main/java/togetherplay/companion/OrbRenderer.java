@@ -30,18 +30,18 @@ public final class OrbRenderer {
         double stretch=frame.stretch();OrbShape.Motion motion=new OrbShape.Motion(stretch,frame.lag(),frame.phase(),c.expression.age(now),frame.earLag(),frame.earTurn());Matrix4f matrix=poses.last().pose();
         for(boolean translucent:new boolean[]{false,true}){
             RenderSystem.depthMask(!translucent);if(translucent){RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();}else RenderSystem.disableBlend();
-            BufferBuilder b=Tesselator.getInstance().getBuilder();b.begin(VertexFormat.Mode.TRIANGLES,DefaultVertexFormat.POSITION_COLOR);
+            BufferBuilder b=GameVersion.triangles();
             OrbShape.paint(c.config,state,now,motion,lighting,translucent,(x,y,z,rgb,alpha)->vertex(b,matrix,x*.3,y*.3,z*.3,rgb,alpha));
-            BufferUploader.drawWithShader(b.end());
+            GameVersion.draw(b);
         }
         if(c.config.face){
             RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.depthMask(false);
-            BufferBuilder b=Tesselator.getInstance().getBuilder();b.begin(VertexFormat.Mode.TRIANGLES,DefaultVertexFormat.POSITION_COLOR);
+            BufferBuilder b=GameVersion.triangles();
             double[] deformation=OrbShape.deformation(c.config,state,now,stretch);int ink=OrbShape.ink(c.config,ambient);
             OrbFace.Sink sink=(x,y,rgb,alpha)->{double[] point=OrbShape.facePoint(c.config,x,y,deformation);vertex(b,matrix,point[0]*.3,point[1]*.3,point[2]*.3,rgb,alpha);};
             OrbExpression.Frame expression=c.expression.frame(now,c.connection.thinking,c.config.reducedMotion);
             OrbFace.paintPet(c.config,expression.from(),now,ambient,1-expression.mix(),frame.gazeX(),frame.gazeY(),c.expression.age(now),sink);OrbFace.paintPet(c.config,expression.to(),now,ambient,expression.mix(),frame.gazeX(),frame.gazeY(),c.expression.age(now),sink);
-            BufferUploader.drawWithShader(b.end());
+            GameVersion.draw(b);
         }
         RenderSystem.depthMask(true);RenderSystem.enableCull();RenderSystem.disableBlend();
         if(c.mc.screen==null&&now<c.bubbleUntil&&!c.bubble.isEmpty()){
@@ -53,6 +53,6 @@ public final class OrbRenderer {
     }
     public static double radius(CompanionConfig c){return c.form.equals("orb")&&(c.ears.equals("preset")||c.ears.equals("none"))&&c.accessory.equals("none")?.35:.62;}
     private static void vertex(BufferBuilder b,Matrix4f m,double x,double y,double z,int rgb,int alpha){
-        b.vertex(m,(float)x,(float)y,(float)z).color(rgb>>16&255,rgb>>8&255,rgb&255,alpha).endVertex();
+        GameVersion.vertex(b,m,(float)x,(float)y,(float)z,rgb>>16&255,rgb>>8&255,rgb&255,alpha);
     }
 }

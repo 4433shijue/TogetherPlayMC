@@ -27,8 +27,9 @@
 | [vec3](https://github.com/PrismarineJS/node-vec3) | 向量运算 | 0.1.10，上游包标注 BSD；保留上游声明 |
 | [fflate](https://github.com/101arrowz/fflate) | ZIP 处理 | 0.8.3，MIT |
 | [yauzl](https://github.com/thejoshwolfe/yauzl) | 按条目读取用户导入的整合包及模组 JAR | 3.4.0，MIT |
+| [Koffi](https://github.com/Koromix/koffi) | 从独立读取进程调用操作系统的 libarchive，读取 7z、RAR 和 TAR | 3.3.8，MIT；不分发系统归档库 |
 | [sharp](https://github.com/lovell/sharp) / [libvips](https://github.com/libvips/libvips) | Transformers.js 间接依赖的图像处理组件 | sharp 0.34.5 / libvips 8.17.3；Apache-2.0 与 LGPL-3.0-or-later 等第三方许可 |
-| [Fabric Loader](https://github.com/FabricMC/fabric-loader) / [Fabric API](https://github.com/FabricMC/fabric-api) | Fabric 伙伴模组的加载与事件 API | Loader 0.16.14 / API 0.92.2+1.20.1，Apache-2.0 |
+| [Fabric Loader](https://github.com/FabricMC/fabric-loader) / [Fabric API](https://github.com/FabricMC/fabric-api) | Fabric 伙伴模组的加载与事件 API | Loader 0.16.14 / API 0.92.2+1.20.1 和 0.116.1+1.21.1，Apache-2.0 |
 | [Minecraft Forge](https://github.com/MinecraftForge/MinecraftForge) | Forge 伙伴模组的加载与事件 API | 47.4.22，LGPL-2.1；用户安装的游戏环境提供 |
 | [Gradle](https://github.com/gradle/gradle) / [Fabric Loom](https://github.com/FabricMC/fabric-loom) / [ForgeGradle](https://github.com/MinecraftForge/ForgeGradle) | 模组构建工具 | 8.7 / 1.6.12 / 6.0.36，分别按上游许可证使用，不随 Windows 应用分发 |
 | [CustomSkinLoader](https://github.com/xfl03/MCCustomSkinLoader) | 可选旧版托管环境的本地皮肤显示 | Universal 15.1，按上游许可；准备脚本按需下载，不内置于本发行包 |

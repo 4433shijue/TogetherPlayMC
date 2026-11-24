@@ -129,7 +129,7 @@ test('dimension switch pauses the original dimension plan and revokes independen
 
 test('API lists compatibility honestly and refuses cross-world plan resumes',async t=>{
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'together-api-'));const app=await createApp({directory,port:0});t.after(async()=>{await app.close();await fs.rm(directory,{recursive:true,force:true});});
-  const state=await fetch(app.url+'/api/state').then(r=>r.json());assert.equal(state.version,appVersion);assert.equal(state.profile.version,'1.20.1');assert.equal(state.mode,'companion');assert.equal(state.storage.source,'explicit');assert.equal(state.storage.integrity,null);assert.deepEqual(state.profile.modpacks,['元素觉醒 1.4.6']);
+  const state=await fetch(app.url+'/api/state').then(r=>r.json());assert.equal(state.version,appVersion);assert.equal(state.profile.version,'1.20.1 / 1.21.1');assert.equal(state.mode,'companion');assert.equal(state.storage.source,'explicit');assert.equal(state.storage.integrity,null);assert.deepEqual(state.profile.modpacks,['元素觉醒 1.4.6','Lets go Cobblemon Master 4.7.1']);
   const res=await fetch(app.url+'/api/plans/resume',{method:'POST',headers:{'content-type':'application/json','x-together-token':state.csrf},body:JSON.stringify({id:'different-world'})});assert.equal(res.status,400);assert.match((await res.json()).error,/世界/);
 });
 

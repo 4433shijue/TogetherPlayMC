@@ -23,9 +23,9 @@ public final class OrbPreview {
             List<Vertex> vertices=groups.get(group);if(vertices.isEmpty())continue;
             RenderSystem.depthMask(group==0);if(group==0)RenderSystem.disableBlend();else{RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();}
             if(group==1){List<Triangle> triangles=new ArrayList<>();for(int i=0;i<vertices.size();i+=3){Vertex a=vertices.get(i),b=vertices.get(i+1),e=vertices.get(i+2);triangles.add(new Triangle(a,b,e,(a.z+b.z+e.z)/3));}triangles.sort(Comparator.comparingDouble(Triangle::depth));vertices=new ArrayList<>();for(Triangle t:triangles){vertices.add(t.a);vertices.add(t.b);vertices.add(t.c);}}
-            BufferBuilder b=Tesselator.getInstance().getBuilder();b.begin(VertexFormat.Mode.TRIANGLES,DefaultVertexFormat.POSITION_COLOR);
-            for(Vertex v:vertices)b.vertex(matrix,(float)(cx+v.x*radius),(float)(cy-v.y*radius),(float)(150+v.z*radius)).color(v.rgb>>16&255,v.rgb>>8&255,v.rgb&255,v.alpha).endVertex();
-            BufferUploader.drawWithShader(b.end());
+            BufferBuilder b=GameVersion.triangles();
+            for(Vertex v:vertices)GameVersion.vertex(b,matrix,(float)(cx+v.x*radius),(float)(cy-v.y*radius),(float)(150+v.z*radius),v.rgb>>16&255,v.rgb>>8&255,v.rgb&255,v.alpha);
+            GameVersion.draw(b);
         }
         RenderSystem.depthMask(true);RenderSystem.enableDepthTest();RenderSystem.enableCull();RenderSystem.disableBlend();
     }

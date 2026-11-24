@@ -19,7 +19,7 @@ public final class ChatAppearanceScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("保存"),b->{if(!name.getValue().matches("#[a-fA-F0-9]{6}")||!body.getValue().matches("#[a-fA-F0-9]{6}")){error="请输入完整的 #RRGGBB 色值。";return;}c.config.chatNameColor=name.getValue();c.config.chatColor=body.getValue();c.config.save();c.connection.appearance();minecraft.setScreen(parent);}).bounds(x,height-37,120,20).build());
         addRenderableWidget(Button.builder(Component.literal("返回"),b->minecraft.setScreen(parent)).bounds(x+132,height-37,120,20).build());
     }
-    @Override public void tick(){name.tick();body.tick();}
+    @Override public void tick(){GameVersion.tick(name);GameVersion.tick(body);}
     @Override public void render(GuiGraphics g,int mx,int my,float partial){
         g.fill(0,0,width,height,0xF01B2929);int x=width/2-130;
         g.drawString(font,title,x,20,0xB8E8D2);g.drawString(font,"名字颜色",x,44,0xEEEEEE);g.drawString(font,"正文颜色",x+132,44,0xEEEEEE);

@@ -73,15 +73,17 @@ export class PackKnowledge {
       const docs=[...(ready?this.search(key,query,options):[]),...local,...extra];
       return [...new Map(docs.map(d=>[d.source+'\n'+d.title,d])).values()].slice(0,limit);
     }
-    const terms=searchTerms(query).slice(0,40);if(!terms.length)return [];
+    const needle=query.trim().replace(/[？?。！!]+$/u,'').replace(/(?:应该|要)?(?:怎么|怎样|如何)(?:合成|制作|做)$/u,'').trim()||query.trim();
+    const terms=searchTerms(needle).slice(0,40);if(!terms.length)return [];
     const match=terms.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR ');
     const select='SELECT d.*,bm25(companion_search) AS relevance FROM companion_search JOIN companion_documents d ON d.rowid=companion_search.rowid WHERE companion_search MATCH ? AND d.pack=?'+(withoutRecipes?" AND d.kind NOT IN ('recipe','script-reference')":'')+(staticOnly?" AND d.id NOT LIKE 'runtime:%'":'');
     const candidates=this.db.prepare(select+' ORDER BY relevance LIMIT 120').all(match,pack);
     // Long ingredient lists rank below short item names in BM25. Reserve candidates for actual recipes.
-    const recipes=withoutRecipes?[]:this.db.prepare(select+" AND d.kind='recipe' ORDER BY relevance LIMIT 80").all(match,pack);
+    const recipes=withoutRecipes?[]:this.db.prepare(select+" AND d.kind='recipe' ORDER BY (substr(d.title,1,instr(d.title,' · ')-1)=?) DESC,relevance LIMIT 80").all(match,pack,needle);
     const rows=[...new Map([...candidates,...recipes].map(d=>[d.id,d])).values()];
     const allowed=new Set(unlocked.map(String));
-    const score=d=>terms.filter(t=>(d.title+' '+d.text).toLowerCase().includes(t)).length*100+d.priority+(d.kind==='recipe'?25:0);
+    const titleKey=s=>s.toLowerCase().replace(/\s+/g,''),exact=titleKey(needle);
+    const score=d=>(titleKey(d.title.split(' · ')[0])===exact?10000:0)+terms.filter(t=>(d.title+' '+d.text).toLowerCase().includes(t)).length*100+d.priority+(d.kind==='recipe'?25:0);
     return rows.filter(d=>(!staticOnly||!d.id.startsWith('runtime:'))&&(!d.quest||spoilers||allowed.has(d.quest))).sort((a,b)=>score(b)-score(a)).slice(0,limit).map(({title,text,source,kind,quest,updated})=>({title,text,source,kind,quest,updated}));
   }
   ingest(pack,documents,{finished=false,begin=false,world}={}) {
@@ -102,7 +104,7 @@ export class PackKnowledge {
     // Stable profile identity across worlds; all source hashes are updated within it.
     const id=profile.id, fingerprint=hash(JSON.stringify(mods)),previous=this.pack(id);
     this.jobs.get(id)?.abort();const controller=new AbortController();this.jobs.set(id,controller);
-    const pack={id,name:profile.name,loader:profile.loader,version:'1.20.1',fingerprint,status:'indexing',progress:0,mods:mods.length,roots:[],warnings:[],runtime:previous?.runtime??'waiting',overview:previous?.fingerprint===fingerprint?previous.overview:null,overviewRequests:previous?.fingerprint===fingerprint?(previous.overviewRequests??0):0,updated:new Date().toISOString()};
+    const pack={id,name:profile.name,loader:profile.loader,version:profile.version??'1.20.1',fingerprint,status:'indexing',progress:0,mods:mods.length,roots:[],warnings:[],runtime:previous?.runtime??'waiting',overview:previous?.fingerprint===fingerprint?previous.overview:null,overviewRequests:previous?.fingerprint===fingerprint?(previous.overviewRequests??0):0,updated:new Date().toISOString()};
     this.savePack(pack);const seen=new Set(),roots=new Set(profile.sources??[]);let total=0;
     const add=doc=>{if(++total>60000)throw new Error('整合包资料超过 60000 条，请缩小资料范围。');seen.add(doc.id);this.put(id,doc);};
     const extract=(relative,content,source)=>{

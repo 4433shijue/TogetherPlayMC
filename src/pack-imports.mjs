@@ -1,17 +1,29 @@
 import fs from 'node:fs/promises';
 import {createReadStream,createWriteStream} from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import {createHash,randomUUID} from 'node:crypto';
-import {Worker} from 'node:worker_threads';
+import {fork} from 'node:child_process';
+import {archiveName} from './archive-stream.mjs';
+import {gameTarget,sameTarget} from './game-versions.mjs';
 import {pipeline} from 'node:stream/promises';
 import {archiveLimit,folderFiles} from './pack-reader.mjs';
 import {scanGames,validateGame} from './game-profiles.mjs';
 import {pairProfile,publicProfile} from './companion-install.mjs';
+import {work} from './paths.mjs';
 
 const pause=()=>new Promise(r=>setImmediate(r));
-const supported=p=>p.version==='1.20.1'&&['forge','fabric'].includes(p.loader);
+const supported=p=>Boolean(gameTarget(p.version,p.loader));
 const active=s=>['waiting','uploading','reading','saving'].includes(s);
+async function importScratch(directory,bytes){
+  // Leave headroom for the index. Prefer user data; portable installs may be on a larger drive.
+  const free=async dir=>{const s=await fs.statfs(dir);return s.bavail*s.bsize;};
+  const required=bytes+64*1024**2;
+  if(await free(directory)>=required)return fs.mkdtemp(path.join(directory,'together-pack-'));
+  if(path.parse(directory).root!==path.parse(work).root){
+    try{await fs.mkdir(work,{recursive:true});if(await free(work)>=required)return await fs.mkdtemp(path.join(work,'together-pack-'));}catch{}
+  }
+  throw Error('资料库和程序所在磁盘空间不足，请释放空间或选择已解压的游戏文件夹。');
+}
 export class PackImports{
   constructor(knowledge,profiles){
     this.k=knowledge;this.store=knowledge.store;this.profiles=profiles;this.hashes=new Map();this.scanned=new Map();
@@ -24,7 +36,7 @@ export class PackImports{
     if(active(this.job?.status))throw Error('已有导入任务，请先等待或取消。');
     const p=this.profiles.find(p=>profileId?p.id===profileId:typeof folder==='string'&&path.resolve(folder).toLowerCase()===path.resolve(p.gameDir).toLowerCase());if(profileId&&!p)throw Error('游戏实例不存在。');
     if(p){folder=p.gameDir;name=p.name;}
-    if(file&&folder||file&&!/\.(mrpack|zip)$/i.test(file)||[file,folder].some(v=>v&&!path.isAbsolute(v)))throw Error('请选择本地整合包或游戏文件夹。');
+    if(file&&folder||file&&!archiveName.test(file)||[file,folder].some(v=>v&&!path.isAbsolute(v)))throw Error('请选择 ZIP、MRPACK、7Z、RAR、TAR 压缩包或游戏文件夹。');
     const j=this.job={id:randomUUID(),status:'waiting',done:0,total:0,name:path.basename(String(name||file||folder||'整合包')).slice(0,180),controller:new AbortController()};
     if(file||folder)this.run(j,{file,folder,name:j.name,profile:p?{loader:p.loader,version:p.version??'1.20.1'}:undefined});
     else{j.timer=setTimeout(()=>this.cancel(j.id),120000);j.timer.unref();}
@@ -35,16 +47,19 @@ export class PackImports{
     j.task=(async()=>{
       let tmp;const signal=j.controller.signal,stage='import-stage:'+j.id;
       try{
+        const size=upload?Number(upload.headers['content-length'])||0:input.file?(await fs.stat(input.file)).size:0;
+        tmp=await importScratch(this.store.directory,size*(upload?2:1));input.scratch=tmp;
         if(upload){
-          tmp=await fs.mkdtemp(path.join(os.tmpdir(),'together-pack-'));input.file=path.join(tmp,'upload.zip');
-          await pipeline(upload,async function*(source){for await(const b of source){j.done+=b.length;if(j.done>archiveLimit)throw Error('压缩包超过 4 GiB。');yield b;}},createWriteStream(input.file,{flags:'wx'}),{signal});
+          input.file=path.join(tmp,'upload');
+          await pipeline(upload,async function*(source){for await(const b of source){j.done+=b.length;if(j.done>archiveLimit)throw Error('压缩包超过 4 GiB。');yield b;}},createWriteStream(input.file,{flags:'wx',highWaterMark:1024*1024}),{signal});
         }
         signal.throwIfAborted();j.status='reading';j.done=0;j.total=0;
         const data=await new Promise((resolve,reject)=>{
-          const worker=new Worker(new URL('./pack-reader.mjs',import.meta.url),{execArgv:[],workerData:{task:'pack-import',input},resourceLimits:{maxOldGenerationSizeMb:512}});
-          const stop=()=>{void worker.terminate();};signal.addEventListener('abort',stop,{once:true});
-          worker.on('message',m=>{if(m.progress)Object.assign(j,m.progress);else if(m.error)reject(Error(m.error));else resolve(m.result);});
-          worker.on('error',reject);worker.on('exit',()=>{signal.removeEventListener('abort',stop);reject(Error('资料读取已中断。'));});
+          const worker=fork(new URL('./pack-reader.mjs',import.meta.url),[],{execArgv:['--max-old-space-size=512'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc'],windowsHide:true});
+          let result,error;const stop=()=>worker.kill();signal.addEventListener('abort',stop,{once:true});
+          worker.on('message',m=>{if(m.progress)Object.assign(j,m.progress);else if(m.error)error=Error(m.error);else result=m.result;});
+          worker.on('error',e=>{error=e;});worker.on('close',(code,sig)=>{signal.removeEventListener('abort',stop);if(result&&!error)resolve(result);else reject(error??Error('资料读取已中断：'+(sig||code)));});
+          worker.send(input);
         });
         signal.throwIfAborted();const {docs,pack,facts}=data;
         if(!this.k.pack(pack.id)){
@@ -61,8 +76,8 @@ export class PackImports{
         }
         if(input.folder&&!input.profile)this.store.set('pack-import-folder:'+pack.id,input.folder);
         j.pack=pack.id;j.status='ready';
-      }catch(e){j.status=signal.aborted?'cancelled':'error';j.error=signal.aborted?'导入已取消。':String(e.message).slice(0,350);}
-      finally{this.discard(stage);if(tmp)await fs.rm(path.join(tmp,'upload.zip'),{force:true}).then(()=>fs.rmdir(tmp));}
+      }catch(e){j.status=signal.aborted?'cancelled':'error';j.error=signal.aborted?'导入已取消。':/ENOSPC/.test(e.message)?'资料库所在磁盘空间不足。请释放空间，或选择已解压的游戏文件夹。':String(e.message).slice(0,350);}
+      finally{this.discard(stage);if(tmp)await fs.rm(tmp,{recursive:true,force:true,maxRetries:3});}
     })();return j.task;
   }
   async upload(id,req){const j=this.job;if(!j||j.id!==id||j.status!=='waiting')throw Error('上传任务无效。');if(Number(req.headers['content-length'])>archiveLimit){this.cancel(id);throw Error('压缩包超过 4 GiB。');}j.total=Number(req.headers['content-length'])||0;await this.run(j,{name:j.name},req);return this.state();}
@@ -77,7 +92,7 @@ export class PackImports{
       for(const p of found){const key=createHash('sha256').update(p.versionDir).digest('hex').slice(0,24);scanned.push({...p,id:'scanned:'+key});}
       this.scanned.set(id,scanned);
     }
-    const candidates=this.profiles.concat((this.scanned.get(id)??[]).filter(p=>!this.profiles.some(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase()&&p.loader===f.loader)));
+    const candidates=this.profiles.concat((this.scanned.get(id)??[]).filter(p=>!this.profiles.some(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase()&&sameTarget(f,p))));
     for(const f of candidates){
       const r={id:f.id,name:f.name,path:f.gameDir,matched:0,missing:0,changed:0,extra:0,differences:[],level:'incompatible'},examples=s=>{if(r.differences.length<5)r.differences.push(s);};
       rows.push(r);if(!supported(p)||(f.version??'1.20.1')!==p.version||f.loader!==p.loader){examples('游戏版本或加载器不匹配');continue;}
@@ -93,7 +108,7 @@ export class PackImports{
           if(value===hash)r.matched++;else{r.changed++;examples('已修改：'+rel);}
         }catch{r.missing++;examples('缺失或不可读取：'+rel);}
       }
-      for(const n of local.keys())if((/^mods\/.*\.jar$/i.test(n)||['folder','zip'].includes(p.format)&&n.includes('/'))&&!Object.hasOwn(facts,n)){r.extra++;examples('实例另有：'+n);}
+      for(const n of local.keys())if((/^mods\/.*\.jar$/i.test(n)||!['modrinth','curseforge'].includes(p.format)&&n.includes('/'))&&!Object.hasOwn(facts,n)){r.extra++;examples('实例另有：'+n);}
       r.level=r.matched&&!r.missing&&!r.changed&&!r.extra&&!p.warnings.length&&!(p.format==='curseforge'&&p.declared)?'high':'possible';
     }
     rows.sort((a,b)=>({high:2,possible:1,incompatible:0}[b.level]-{high:2,possible:1,incompatible:0}[a.level])||b.matched-a.matched);
@@ -104,7 +119,7 @@ export class PackImports{
     else if(!(await this.matches(pack)).candidates.some(r=>r.id===profileId&&r.level!=='incompatible'))throw Error('该实例不能绑定这个资料包。');
     if(!unbind&&profileId.startsWith('scanned:')){
       const chosen=(this.scanned.get(pack)??[]).find(f=>f.id===profileId),p=await validateGame(chosen);
-      const existing=this.profiles.find(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase());if(existing&&existing.loader!==p.loader)throw Error('这个共用目录已关联其他加载器，请先核对实例隔离设置。');
+      const existing=this.profiles.find(f=>f.gameDir.toLowerCase()===p.gameDir.toLowerCase());if(existing&&!sameTarget(existing,p))throw Error('这个共用目录已关联其他版本或加载器，请先核对实例隔离设置。');
       if(!existing){this.profiles.push(pairProfile(this.store,p));this.store.set('gameProfiles',this.profiles.map(publicProfile));}
       profileId=existing?.id??p.id;
     }

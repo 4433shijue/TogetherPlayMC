@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {zipSync,strToU8} from 'fflate';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {Store} from '../src/store.mjs';
 import {PackKnowledge} from '../src/pack-knowledge.mjs';
 import {inspectPack} from '../src/pack-reader.mjs';
@@ -19,6 +20,25 @@ const temp=async t=>{const p=await fs.mkdtemp(path.join(os.tmpdir(),'together-im
 async function writeTree(dir,map){for(const [k,v] of Object.entries(map)){const f=path.join(dir,k);await fs.mkdir(path.dirname(f),{recursive:true});await fs.writeFile(f,v instanceof Uint8Array?v:bytes(v));}}
 async function library(t,profiles=[]){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'together-import-test-')),store=new Store(dir),k=new PackKnowledge(store),im=new PackImports(k,profiles);t.after(async()=>{await im.close();store.close();await fs.rm(dir,{recursive:true,force:true});});return {dir,store,k,im};}
 async function imported(im,input){im.start(input);await im.job.task;assert.equal(im.job.status,'ready',im.job.error);return im.job.pack;}
+
+test('Windows reads 7z, tar and gzip/xz/bzip2 tar with the same recipe and Chinese lookup',{skip:process.platform!=='win32'},async t=>{
+ const {im,k,dir}=await library(t);
+ const entries={};for(let i=0;i<100;i++)entries['data/demo/recipe/variant'+i+'.json']={...raw,result:{id:'demo:variant'+i}};
+ const names=Object.fromEntries(Array.from({length:100},(_,i)=>['item.demo.variant'+i,'精灵球变体'+i]));names['item.demo.ball']='精灵球';
+ entries['data/demo/recipe/ball.json']={...raw,result:{id:'demo:ball',count:4}};entries['assets/demo/lang/zh_cn.json']=names;
+ await writeTree(dir,{'mods/ball.jar':zip(entries)});
+ for(const [ext,options] of [['7z',['--format=7zip']],['tar',[]],['tar.gz',['-z']],['tar.xz',['-J']],['tar.bz2',['-j']]]){
+   const file=path.join(dir,'tiny.'+ext);execFileSync('tar.exe',[...options,'-cf',file,'-C',dir,'mods'],{windowsHide:true});
+   const id=await imported(im,{file});const [hit]=k.search(id,'精灵球怎么做？');
+   assert.equal(hit.title,'精灵球 · demo:ball',ext);assert.equal(hit.source,'mods/ball.jar!/data/demo/recipe/ball.json');
+ }
+});
+test('stored RAR imports a real manual without a rar executable',async t=>{
+ const {im,k,dir}=await library(t),file=path.join(dir,'book.rar');
+ // One RAR4 store-method member: patchouli_books/test/entry.json.
+ await fs.writeFile(file,Buffer.from('UmFyIRoHAM+QcwAADQAAAAAAAABZPnQAgD8AFQAAABUAAAACE2eYbgAAAAAUMB8AIAAAAHBhdGNob3VsaV9ib29rcy90ZXN0L2VudHJ5Lmpzb257Im5hbWUiOiJSQVIgbWFudWFsIn0EsHsAAAcA','base64'));
+ const id=await imported(im,{file});assert.equal(im.list()[0].format,'rar');assert.equal(k.search(id,'RAR manual')[0].source,'patchouli_books/test/entry.json');
+});
 
 test('imports wrapped ZIP, nested JAR manuals and recipes, ignores private files and unrecognized quests',async t=>{
  const dir=await temp(t),p=path.join(dir,'demo.zip'),content={...sample,'mods/book.jar':zip({'data/demo/recipes/lamp.json':raw,'data/demo/patchouli_books/test/en_us/entries/sun.json':{name:'Sun manual'}}),'config/custom/quests.json':{title:'never_read'}};

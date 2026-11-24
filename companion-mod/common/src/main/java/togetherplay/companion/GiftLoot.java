@@ -21,7 +21,7 @@ final class GiftLoot {
     }
     private static Set<String> read(ResourceManager manager){
         Set<String> ids=new HashSet<>();
-        for(var resource:manager.listResources("loot_tables",p->p.getPath().endsWith(".json")).values()){
+        for(var resource:manager.listResources(GameVersion.LOOT_DIRECTORY,p->p.getPath().endsWith(".json")).values()){
             try(Reader reader=resource.openAsReader()){collect(JsonParser.parseReader(reader),ids);}catch(Exception ignored){}
         }
         return ids;

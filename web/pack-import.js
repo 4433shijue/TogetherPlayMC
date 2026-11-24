@@ -2,7 +2,7 @@ export function setupPackImport({getState,api,run,el,btn}){
  const $=id=>document.getElementById(id),url='/api/companion/pack-import';
  const call=(action,data={})=>api(url,{action,...data});
  const panel=el('article');panel.id='pack-library';
- panel.innerHTML='<h3>本地整合包资料库</h3><div class="buttons"><label class="pack-picker">选择或拖入整合包<input id="pack-file" type="file" accept=".zip,.mrpack"></label><button id="pack-folder" type="button">导入游戏文件夹</button></div><form id="pack-path-form" hidden><label>游戏实例文件夹<input id="pack-path" required placeholder="包含 mods 或配置的目录"></label><button>读取文件夹</button></form><p id="pack-status" role="status"></p><button id="pack-cancel" hidden>取消导入</button><label id="pack-select-label" hidden>资料包<select id="pack-select"></select></label><div id="pack-detail"></div>';
+panel.innerHTML='<h3>本地整合包资料库</h3><div class="buttons"><label class="pack-picker">选择或拖入整合包<input id="pack-file" type="file" accept=".zip,.mrpack,.7z,.rar,.tar,.tar.gz,.tar.xz,.tar.bz2,.tgz,.txz,.tbz,.tbz2"></label><button id="pack-folder" type="button">导入游戏文件夹</button></div><form id="pack-path-form" hidden><label>游戏实例文件夹<input id="pack-path" required placeholder="包含 mods 或配置的目录"></label><button>读取文件夹</button></form><p id="pack-status" role="status"></p><button id="pack-cancel" hidden>取消导入</button><label id="pack-select-label" hidden>资料包<select id="pack-select"></select></label><div id="pack-detail"></div>';
  $('page-connect').insertBefore(panel,$('diagnosis-list'));
  let packs=[],job,timer,selected='',rendered='',detailSeq=0,upload;
  const busy=()=>['waiting','uploading','reading','saving'].includes(job?.status);
@@ -33,12 +33,12 @@ export function setupPackImport({getState,api,run,el,btn}){
  }
  function detail(p){
    const seq=++detailSeq,d=$('pack-detail');d.replaceChildren();if(!p)return;
-   const labels={'modrinth':'Modrinth','curseforge':'CurseForge','zip':'游戏压缩包','folder':'游戏文件夹'};
+   const labels={'modrinth':'Modrinth','curseforge':'CurseForge','zip':'ZIP','7z':'7-Zip','rar':'RAR','tar':'TAR','folder':'游戏文件夹'};
    d.append(el('h4',p.name),el('p',[labels[p.format],p.release,p.version?'MC '+p.version:'游戏版本未知',p.loader==='unknown'?'加载器未知':p.loader].filter(Boolean).join(' · '),'small'));
    const counts=Object.entries(p.counts).map(([k,n])=>({quest:'任务',manual:'手册',recipe:'配方','script-reference':'脚本线索'}[k]??k)+' '+n);
    d.append(el('p','模组 '+p.mods+' · '+(counts.length?counts.join(' · '):p.manifestOnly?'只有模组清单':'未读到可查资料')));
    if(!p.counts.quest)d.append(el('p','没有读到可识别的任务资料；不代表这个包没有任务。','small'));
-   if(p.version!=='1.20.1'||!['fabric','forge'].includes(p.loader))d.append(el('p','仅离线查阅：当前伙伴支持 Minecraft 1.20.1 Fabric / Forge。','small'));
+   if(!(p.version==='1.20.1'&&['fabric','forge'].includes(p.loader)||p.version==='1.21.1'&&p.loader==='fabric'))d.append(el('p','仅离线查阅：当前伙伴支持 1.20.1 Fabric / Forge 和 1.21.1 Fabric。','small'));
    for(const w of p.warnings)d.append(el('p',w,'small'));
    const form=el('form'),q=el('input'),out=el('div');q.placeholder='搜索任务、手册或配方';q.maxLength=400;q.required=true;q.setAttribute('aria-label','搜索本包资料');
    form.append(q,el('button','查资料'));form.onsubmit=run(async()=>{const rows=await call('search',{pack:p.id,query:q.value.trim()});out.replaceChildren();if(!rows.length)report(out,'本包没有找到相关资料。');for(const r of rows){const hit=el('details'),body=el('p',r.text);hit.append(el('summary',r.title),el('p',r.source,'source-url'),body);out.append(hit);}});
@@ -58,7 +58,7 @@ export function setupPackImport({getState,api,run,el,btn}){
    clearTimeout(timer);if(busy())timer=setTimeout(()=>load().catch(e=>{$('pack-status').textContent=e.message;}),650);
  }
  async function file(f){
-   if(!f)return;if(!/\.(zip|mrpack)$/i.test(f.name))throw Error('请选择 .zip 或 .mrpack 整合包。');
+   if(!f)return;if(!/\.(?:zip|mrpack|7z|rar|tar|tar\.(?:gz|bz2|xz)|tgz|txz|tbz2?)$/i.test(f.name))throw Error('请选择 ZIP、MRPACK、7Z、RAR 或 TAR 系列整合包。');
    if(f.size>4*1024**3)throw Error('压缩包超过 4 GiB。');
    const local=window.togetherDesktop?.packFilePath?.(f);
    const {id}=await call('start',local?{file:local,name:f.name}:{name:f.name});

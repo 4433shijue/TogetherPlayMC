@@ -1,3 +1,4 @@
+import {gameTargets,companionJar} from '../src/game-versions.mjs';
 import {appVersion} from '../src/version.mjs';
 const docTag='v'+appVersion.split('.').slice(0,2).join('');
 import fs from 'node:fs/promises';
@@ -40,7 +41,7 @@ assert.match(await fs.readFile(path.join(stage,'src/plain-text.mjs'),'utf8'),/pl
 const catalogue=JSON.parse(await fs.readFile(path.join(stage,'web/orb-forms.json'),'utf8'));
 assert.equal(catalogue.forms.length,7);assert.equal(catalogue.dogBreeds.length,8);assert.equal(catalogue.catCoats.length,5);
 assert.equal(catalogue.personalityModes.length,3);assert.equal(catalogue.personalityPresets.length,7);
-for(const loader of ['fabric','forge']){const zip=unzipSync(await fs.readFile(path.join(stage,`artifacts/mods/together-companion-${loader}-1.20.1-0.6.0.jar`)));assert.deepEqual(JSON.parse(strFromU8(zip['assets/together_companion/orb-forms.json'])),catalogue);assert.deepEqual(JSON.parse(strFromU8(zip['assets/together_companion/orb-meshes.json'])),JSON.parse(await fs.readFile(path.join(stage,'web/orb-meshes.json'),'utf8')));assert.equal(JSON.parse(strFromU8(zip['together-build.json'])).version,appVersion);for(const name of ['CompanionBuild','OrbShape','OrbEarSpring','OrbBody','OrbPreview','AppearanceScreen'])assert.ok(zip[`togetherplay/companion/${name}.class`]);}
+for(const target of gameTargets){const zip=unzipSync(await fs.readFile(path.join(stage,'artifacts/mods',companionJar(target))));assert.deepEqual(JSON.parse(strFromU8(zip['assets/together_companion/orb-forms.json'])),catalogue);assert.deepEqual(JSON.parse(strFromU8(zip['assets/together_companion/orb-meshes.json'])),JSON.parse(await fs.readFile(path.join(stage,'web/orb-meshes.json'),'utf8')));assert.equal(JSON.parse(strFromU8(zip['together-build.json'])).version,appVersion);for(const name of ['CompanionBuild','OrbShape','OrbEarSpring','OrbBody','OrbPreview','AppearanceScreen'])assert.ok(zip[`togetherplay/companion/${name}.class`]);}
 const {createApp}=await import(pathToFileURL(path.join(stage,'src/server.mjs')));
 const directory=path.join(root,'work/'+docTag+'-packaged-smoke'),app=await createApp({directory,port:0,companionProfiles:[],companionRequest:async()=>{throw Error('No model calls during appearance QA');}});
 try{
@@ -57,5 +58,5 @@ try{
  const before=app.store.memories(state.selectedRole).length,snap=await storagePost('backup');app.store.memory(state.selectedRole,'','fact','发行包恢复夹具');const preview=await storagePost('preview',{id:snap.id});assert.equal(preview.current.memories,before+1);await storagePost('restore',{id:snap.id,token:preview.token});assert.equal(app.store.memories(state.selectedRole).length,before);assert.equal((await fetch(app.url+'/api/state').then(r=>r.json())).version,appVersion);
 }finally{await app.close();}
 assert.ok(manifest.files.every(item=>!/^(?:data|config|work)(\/|$)/.test(item.path)));
-const result={version:appVersion,files:manifest.files.length,bytes:manifest.files.reduce((n,f)=>n+f.bytes,0),allHashesVerified:true,packagedLocalEmbeddingPassed:true,bothJarCataloguesMatch:true,packagedRoutesPassed:true,packagedColorPersistencePassed:true,packagedPersonalityPersistencePassed:true,packagedDesktopShortcutPassed:true,packagedIdentityPresentationPassed:true,packagedCacheDiagnosticsPassed:true,packagedCacheNormalizationPassed:true,packagedCacheTestApiPassed:true,packagedStorageDiagnosticsPassed:true,packagedBackupRestorePassed:true,personalDataExcluded:true};
+const result={version:appVersion,files:manifest.files.length,bytes:manifest.files.reduce((n,f)=>n+f.bytes,0),allHashesVerified:true,packagedLocalEmbeddingPassed:true,jarCataloguesChecked:gameTargets.length,packagedRoutesPassed:true,packagedColorPersistencePassed:true,packagedPersonalityPersistencePassed:true,packagedDesktopShortcutPassed:true,packagedIdentityPresentationPassed:true,packagedCacheDiagnosticsPassed:true,packagedCacheNormalizationPassed:true,packagedCacheTestApiPassed:true,packagedStorageDiagnosticsPassed:true,packagedBackupRestorePassed:true,personalDataExcluded:true};
 await fs.writeFile(path.join(root,'work/'+docTag+'-package-acceptance.json'),JSON.stringify(result,null,2));console.log(result);

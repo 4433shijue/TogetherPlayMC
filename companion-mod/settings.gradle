@@ -9,7 +9,7 @@ pluginManagement {
 rootProject.name = 'together-companion'
 def selectedLoader = providers.gradleProperty('companionLoader').orNull
 if (selectedLoader != null) {
-    if (!(selectedLoader in ['fabric', 'forge'])) throw new GradleException('Unknown companion loader')
+    if (!(selectedLoader in ['fabric', 'forge', 'fabric1211'])) throw new GradleException('Unknown companion loader')
     include selectedLoader
 } else {
     include 'fabric', 'forge'

@@ -8,7 +8,7 @@ import net.minecraft.util.FormattedCharSequence;
 import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
-public final class CompanionScreen extends Screen {
+public final class CompanionScreen extends VersionScrollScreen {
     private final CompanionClient companion;
     private EditBox input;
     private final ChatViewport viewport=new ChatViewport();
@@ -52,11 +52,11 @@ public final class CompanionScreen extends Screen {
     private void jumpToLatest(){viewport.latest();unread=0;}
     private void send(){String text=input.getValue().trim();if(text.isEmpty())return;jumpToLatest();if(!companion.connection.status.equals("陪在你身边")){companion.history.add(new CompanionClient.Line("提示","伙伴尚未连接，请检查控制台或稍后重试。",new com.google.gson.JsonArray()));return;}companion.voice.stop();companion.connection.send(text);input.setValue("");draft="";}
     @Override public boolean keyPressed(int key,int scan,int modifiers){if((key==GLFW.GLFW_KEY_ENTER||key==GLFW.GLFW_KEY_KP_ENTER)&&input.isFocused()){send();return true;}if(key==GLFW.GLFW_KEY_PAGE_UP||key==GLFW.GLFW_KEY_PAGE_DOWN){viewport.scroll((key==GLFW.GLFW_KEY_PAGE_UP?1:-1)*Math.max(12,height-160));return true;}if(hasControlDown()&&(key==GLFW.GLFW_KEY_HOME||key==GLFW.GLFW_KEY_END)){if(key==GLFW.GLFW_KEY_HOME)viewport.oldest();else jumpToLatest();return true;}return super.keyPressed(key,scan,modifiers);}
-    @Override public boolean mouseScrolled(double x,double y,double delta){if(y>=86&&y<height-60){viewport.scroll((int)Math.round(delta*28));return true;}return super.mouseScrolled(x,y,delta);}
+    @Override protected boolean scrollContent(double x,double y,double delta){if(y>=86&&y<height-60){viewport.scroll((int)Math.round(delta*28));return true;}return false;}
     @Override public boolean mouseClicked(double x,double y,int button){if(button==0&&viewport.maximum()>0&&x>=width-24&&x<=width-12&&y>=86&&y<height-60){int thumb=viewport.thumbTop(86);dragGrab=y>=thumb&&y<thumb+viewport.thumbHeight()?y-thumb:viewport.thumbHeight()/2.0;dragging=true;viewport.dragThumb(y-dragGrab,86);return true;}return super.mouseClicked(x,y,button);}
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(dragging&&button==0){viewport.dragThumb(y-dragGrab,86);return true;}return super.mouseDragged(x,y,button,dx,dy);}
     @Override public boolean mouseReleased(double x,double y,int button){if(button==0&&dragging){dragging=false;return true;}return super.mouseReleased(x,y,button);}
-    @Override public void tick(){input.tick();}
+    @Override public void tick(){GameVersion.tick(input);}
     @Override public void render(GuiGraphics graphics,int mouseX,int mouseY,float partial){
         graphics.fill(8,5,width-8,height-8,0xE51B2929);graphics.drawString(font,font.plainSubstrByWidth(companion.connection.name,Math.max(40,width-250)),20,16,0xB8E8D2);graphics.drawString(font,font.plainSubstrByWidth(companion.connection.thinking?(companion.connection.progress.isEmpty()?"正在想怎么回答你…":companion.connection.progress):companion.connection.status,Math.max(20,width-144)),20,height-47,0xB6C8C5);
         List<FormattedCharSequence> lines=new ArrayList<>();int appended=0,newMessages=0;boolean foundLast=false;

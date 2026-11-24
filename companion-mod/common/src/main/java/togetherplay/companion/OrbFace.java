@@ -61,8 +61,8 @@ public final class OrbFace {
             sink.vertex((float)(x*cos-y*sin),(float)(x*sin+y*cos),rgb,Math.round(255*v.opacity*opacity));}
     }
     public static void preview(GuiGraphics g,int cx,int cy,int radius,String state,long now,boolean reduced,int background){
-        g.flush();RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.disableCull();RenderSystem.setShader(GameRenderer::getPositionColorShader);BufferBuilder b=Tesselator.getInstance().getBuilder();b.begin(VertexFormat.Mode.TRIANGLES,DefaultVertexFormat.POSITION_COLOR);var matrix=g.pose().last().pose();
-        paint(state,now,reduced,ink(background),1,(x,y,rgb,alpha)->b.vertex(matrix,cx+x*radius/100,cy-y*radius/100,.1f).color(rgb>>16&255,rgb>>8&255,rgb&255,alpha).endVertex());
-        BufferUploader.drawWithShader(b.end());RenderSystem.enableCull();RenderSystem.disableBlend();
+        g.flush();RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.disableCull();RenderSystem.setShader(GameRenderer::getPositionColorShader);BufferBuilder b=GameVersion.triangles();var matrix=g.pose().last().pose();
+        paint(state,now,reduced,ink(background),1,(x,y,rgb,alpha)->GameVersion.vertex(b,matrix,cx+x*radius/100,cy-y*radius/100,.1f,rgb>>16&255,rgb>>8&255,rgb&255,alpha));
+        GameVersion.draw(b);RenderSystem.enableCull();RenderSystem.disableBlend();
     }
 }

@@ -7,7 +7,7 @@ import net.minecraft.network.chat.Component;
 import java.util.function.BiConsumer;
 
 /** Local draft editor. Only the parent Save button persists the goal. */
-public final class GoalStepsScreen extends Screen {
+public final class GoalStepsScreen extends VersionScrollScreen {
     private final Screen parent;private final JsonArray steps;private final BiConsumer<JsonArray,String> accept;
     private EditBox text;private int offset=0,selected=-1;private String reminder,error="";
     public GoalStepsScreen(Screen parent,JsonArray steps,String reminder,BiConsumer<JsonArray,String> accept){super(Component.literal("分步骤与提醒"));this.parent=parent;this.steps=steps.deepCopy();this.reminder=reminder;this.accept=accept;}
@@ -26,8 +26,8 @@ public final class GoalStepsScreen extends Screen {
         }
         button("完成编辑",16,height-34,90,()->{accept.accept(steps,reminder);minecraft.setScreen(parent);});button("取消",114,height-34,64,this::onClose);
     }
-    @Override public boolean mouseScrolled(double x,double y,double delta){offset+=delta<0?1:-1;rebuildWidgets();return true;}
-    @Override public void tick(){text.tick();}
+    @Override protected boolean scrollContent(double x,double y,double delta){offset+=delta<0?1:-1;rebuildWidgets();return true;}
+    @Override public void tick(){GameVersion.tick(text);}
     @Override public boolean isPauseScreen(){return false;}
     @Override public void onClose(){minecraft.setScreen(parent);}
     @Override public void render(GuiGraphics g,int x,int y,float tick){g.fill(0,0,width,height,0xF01B2929);g.drawString(font,title,16,14,0xB8E8D2);g.drawString(font,"点圆圈确认完成，点文字编辑；滚轮翻页。返回后记得保存打算。",16,31,0xAABCB3);if(!error.isEmpty())g.drawString(font,error,188,height-28,0xF0B4A5);super.render(g,x,y,tick);}

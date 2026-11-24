@@ -1,4 +1,5 @@
 import {appVersion} from './version.mjs';
+import {sameTarget} from './game-versions.mjs';
 import {keepsakes} from './keepsakes.mjs';
 import {timingSafeEqual} from 'node:crypto';
 import {PackKnowledge} from './pack-knowledge.mjs';
@@ -17,7 +18,7 @@ import {placeSuggestions,decidePlace} from './place-dialogue.mjs';
 import {placeContext} from './companionship.mjs';
 
 const json=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));};
-export const companionProfile={version:'1.20.1',mode:'companion',singleplayerOnly:true,loaders:['Fabric 0.16.14','Forge 47.4.22'],modpacks:['元素觉醒 1.4.6'],capabilities:[{name:'私人文字聊天',status:'客户端陪伴',note:'游戏内按 T；模型服务在本机运行。'},{name:'球体跟随',status:'客户端形象',note:'不生成第二名玩家；可在私人单人世界开启物品赠礼。'},{name:'整合包资料',status:'按来源覆盖',note:'常见配方、任务与手册；特殊机制需核实。'}]};
+export const companionProfile={version:'1.20.1 / 1.21.1',mode:'companion',singleplayerOnly:true,loaders:['Fabric 0.16.14','Forge 47.4.22'],modpacks:['元素觉醒 1.4.6','Lets go Cobblemon Master 4.7.1'],capabilities:[{name:'私人文字聊天',status:'客户端陪伴',note:'游戏内按 T；模型服务在本机运行。'},{name:'球体跟随',status:'客户端形象',note:'不生成第二名玩家；可在私人单人世界开启物品赠礼。'},{name:'整合包资料',status:'按来源覆盖',note:'常见配方、任务与手册；特殊机制需核实。'}]};
 export async function createCompanionAPI({store,provider,visionProvider,emit,role,getMode,setMode,legacy,directory,profiles:initialProfiles,request}) {
   const voice=new VoiceService(store);
   const profiles=(initialProfiles??await configuredProfiles(store)).map(p=>pairProfile(store,p));let sequence=0,closed=false;const events=[],jobs=new Set();
@@ -134,7 +135,7 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
         case '/api/companion/scan':json(res,200,{profiles:await scanGames(b.path)});break;
         case '/api/companion/profile': {
           const p=await validateGame(b),existing=profiles.find(x=>x.gameDir.toLowerCase()===p.gameDir.toLowerCase());
-          if(existing){if(chat.client?.profileId===existing.id)throw Error('先退出当前世界再修改游戏配置。');Object.assign(existing,p,{id:existing.id});}
+          if(existing){if(!sameTarget(existing,p))throw Error('这个目录已用于其他版本或加载器，请先在启动器中启用实例隔离。');if(chat.client?.profileId===existing.id)throw Error('先退出当前世界再修改游戏配置。');Object.assign(existing,p,{id:existing.id});}
           else profiles.push(pairProfile(store,p));store.set('gameProfiles',profiles.map(publicProfile));json(res,200,{profiles:profiles.map(publicProfile)});break;
         }
         case '/api/companion/restore': {const p=profiles.find(p=>p.id===b.profileId),m=p&&store.get('installation:'+p.id);if(!m)throw Error('还没有可恢复的安装备份。');json(res,200,await restoreProfile(m));break;}

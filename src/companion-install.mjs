@@ -3,6 +3,8 @@ import path from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {root,runtime} from './paths.mjs';
 import {assertGamesClosed} from './game-profiles.mjs';
+import {gameTarget,companionJar} from './game-versions.mjs';
+import yauzl from 'yauzl';
 
 export async function configuredProfiles(store){
   const saved=store?.get('gameProfiles');if(saved)return saved;
@@ -16,17 +18,36 @@ export function pairProfile(store,profile){
 }
 export function publicProfile(profile){const {token,...safe}=profile;return safe;}
 
+async function hasFabricApi(mods){
+  const jars=(await fs.readdir(mods,{withFileTypes:true})).filter(f=>f.isFile()&&f.name.endsWith('.jar')).map(f=>f.name);
+  if(jars.some(n=>/^(?:\[[^\]]+\])*fabric-api-.*\.jar$/i.test(n)))return true;
+  for(const name of jars){
+    let zip;
+    try{
+      zip=await yauzl.openPromise(path.join(mods,name));if(zip.entryCount>100000)continue;
+      for await(const e of zip.eachEntry())if(e.fileName==='fabric.mod.json'){
+        if(e.uncompressedSize>256*1024)break;
+        const chunks=[];for await(const chunk of await zip.openReadStreamPromise(e))chunks.push(chunk);
+        if(JSON.parse(Buffer.concat(chunks).toString('utf8')).id==='fabric-api')return true;
+        break;
+      }
+    }catch{/* Non-Fabric mods may not expose readable Fabric metadata. */}
+    finally{zip?.close();}
+  }
+  return false;
+}
+
 export async function installProfile(profile,{endpoint,directory,dist=path.join(root,'artifacts/mods')}={}) {
   await assertGamesClosed();
-  if(!['forge','fabric'].includes(profile.loader))throw new Error('不支持此加载器。');
+  const target=gameTarget(profile.version??'1.20.1',profile.loader);if(!target)throw new Error('不支持这个 Minecraft 版本与加载器组合。');
   const game=path.resolve(profile.gameDir),mods=path.join(game,'mods'),cfg=path.join(game,'config');
   await fs.access(game);await fs.mkdir(mods,{recursive:true});await fs.mkdir(cfg,{recursive:true});
-  const name=`together-companion-${profile.loader}-1.20.1-0.6.0.jar`,jar=await fs.readFile(path.join(dist,name));
+  const name=companionJar(target),jar=await fs.readFile(path.join(dist,name));
   let apiArtifact=null;
-  if(profile.loader==='fabric'&&!(await fs.readdir(mods)).some(f=>/^fabric-api-.*\.jar$/.test(f))){
-    const apiName='fabric-api-0.92.2+1.20.1.jar',cache=path.join(runtime,'cache',apiName),url='https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.92.2+1.20.1/'+apiName;
+  if(profile.loader==='fabric'&&!await hasFabricApi(mods)){
+    const apiName='fabric-api-'+target.api+'.jar',cache=path.join(runtime,'cache',apiName),url='https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/'+target.api+'/'+apiName;
     // Pinned artifact verified against the publisher's Maven SHA-1; cache installation works offline.
-    const sha='625ee015ee426d9b677382a7bb661383d89c0807';
+    const sha=target.sha1;
     await fs.mkdir(path.dirname(cache),{recursive:true});
     let data;try{data=await fs.readFile(cache);}catch{}
     if(!data||createHash('sha1').update(data).digest('hex')!==sha.trim()){
@@ -39,7 +60,7 @@ export async function installProfile(profile,{endpoint,directory,dist=path.join(
   await fs.mkdir(backup,{recursive:true});const changes=[];
   const preserve=async file=>{try{await fs.copyFile(file,path.join(backup,path.basename(file)));return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}};
   // Only this project's previous artifacts are retired. Other mods and saves are untouched.
-  for(const old of await fs.readdir(mods))if(/^together-companion-(?:fabric|forge)-1\.20\.1-[\d.]+\.jar$/.test(old)||old==='togetherplay-bridge.jar'){
+  for(const old of await fs.readdir(mods))if(/^together-companion-(?:fabric|forge)-1\.(?:20|21)\.1-[\d.]+\.jar$/.test(old)||old==='togetherplay-bridge.jar'){
     await preserve(path.join(mods,old));changes.push(old);
   }
   const configFile=path.join(cfg,'together-companion.json');await preserve(configFile);

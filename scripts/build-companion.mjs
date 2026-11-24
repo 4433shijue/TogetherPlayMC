@@ -1,3 +1,4 @@
+import {gameTargets,companionJar} from '../src/game-versions.mjs';
 import {appVersion} from '../src/version.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -25,13 +26,13 @@ const config=await fs.readFile(path.join(root,'config/experiment.json'),'utf8').
 const javaHome=process.env.JAVA_HOME||(config.javaPath?path.dirname(path.dirname(config.javaPath)):null);
 const args=process.argv.slice(2);
 const quote=s=>"'"+s.replaceAll("'","''")+"'";
-async function run(tasks){return new Promise((resolve,reject)=>{const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command',`& ${quote(gradle)} -p ${quote(path.join(root,'companion-mod'))} ${tasks.map(t=>{if(!/^[\w:=-]+$/.test(t))throw new Error('Invalid build argument');return quote(t);}).join(' ')} --console=plain; exit $LASTEXITCODE`],{windowsHide:true,stdio:'inherit',env:{...process.env,...(javaHome?{JAVA_HOME:javaHome}:{})}});child.on('error',reject);child.on('exit',resolve);});}
-if(args.length){process.exitCode=await run(args);}
+async function run(tasks,home=javaHome){return new Promise((resolve,reject)=>{const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command',`& ${quote(gradle)} -p ${quote(path.join(root,'companion-mod'))} ${tasks.map(t=>{if(!/^[\w:=-]+$/.test(t))throw new Error('Invalid build argument');return quote(t);}).join(' ')} --console=plain; exit $LASTEXITCODE`],{windowsHide:true,stdio:'inherit',env:{...process.env,...(home?{JAVA_HOME:home}:{})}});child.on('error',reject);child.on('exit',resolve);});}
+if(args.length){process.exitCode=await run(args,args.some(t=>t.includes('fabric1211'))?(process.env.JAVA21_HOME||javaHome):javaHome);}
 else{
   const target=path.join(root,'artifacts/mods');await fs.mkdir(target,{recursive:true});const checksums=[];
-  for(const loader of ['fabric','forge']){
-    const code=await run([`:${loader}:build`,`-PcompanionLoader=${loader}`]);if(code!==0){process.exitCode=code||1;break;}
-    const name=`together-companion-${loader}-1.20.1-0.6.0.jar`,bytes=await fs.readFile(path.join(root,'companion-mod',loader,'build/libs',name)),entries=unzipSync(bytes);
+  for(const t of gameTargets){const {project,loader}=t;
+    const code=await run([`:${project}:build`,`-PcompanionLoader=${project}`],t.java===21?(process.env.JAVA21_HOME||javaHome):javaHome);if(code!==0){process.exitCode=code||1;break;}
+    const name=companionJar(t),bytes=await fs.readFile(path.join(root,'companion-mod',project,'build/libs',name)),entries=unzipSync(bytes);
     if(!entries['togetherplay/companion/CompanionClient.class']||!entries[loader==='fabric'?'fabric.mod.json':'META-INF/mods.toml'])throw new Error('Incomplete companion archive: '+name);
     await fs.writeFile(path.join(target,name),bytes);checksums.push(createHash('sha256').update(bytes).digest('hex')+'  '+name);console.log('Verified package: '+name);
   }

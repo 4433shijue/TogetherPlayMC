@@ -58,7 +58,8 @@ export async function createApp({directory,storage,port=38885,open=false,compani
   };
   async function prepareEnvironment(){if(preparing)throw new Error('环境正在准备，请稍等。');preparing=true;try{return await prepareCompanion(notice);}finally{preparing=false;}}
   async function writeBridge(){await fs.mkdir(path.join(managedGame,'config'),{recursive:true});await fs.writeFile(path.join(managedGame,'config/togetherbridge.json'),JSON.stringify({endpoint:`http://127.0.0.1:${server.address().port}`,token:bridgeToken}));}
-  const server=http.createServer(async(req,res)=>{
+  // A local browser may need more than five minutes to send a multi-GiB pack.
+  const server=http.createServer({requestTimeout:30*60000,headersTimeout:60000},async(req,res)=>{
     activeRequests++;
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'");
     try{

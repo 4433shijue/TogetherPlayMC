@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {crc32} from 'node:zlib';
-import {parentPort,workerData} from 'node:worker_threads';
+import {pathToFileURL} from 'node:url';
 import yauzl from 'yauzl';
 import {staticDocuments} from './pack-knowledge.mjs';
+import {archiveSignature,spoolArchive} from './archive-stream.mjs';
 
 export const archiveLimit=4*1024**3;
 const digest=(v,alg='sha512')=>createHash(alg).update(v).digest('hex');
@@ -14,17 +16,19 @@ const modFile=p=>/^mods\/[^/]+\.jar$/i.test(p)&&!/^mods\/together-companion-/i.t
 const sensitive=p=>/(?:^|\/)(?:saves|logs|accounts?|screenshots|crash-reports|togetherplay|together-companion)(?:[./_-]|$)|(?:token|password|credentials|api[-_]?key)/i.test(p);
 const dataFile=p=>!sensitive(p)&&roots.includes(p.split('/')[0])&&/\.(?:json|snbt|js|toml|cfg|properties)$/i.test(p);
 const reference=p=>/(?:^|\/)patchouli_books\/.*\.json$|(?:^|\/)data\/[^/]+\/recipes?\/.*\.json$|^config\/ftbquests\/quests\/.*\.snbt$|^kubejs\/(?:server_scripts|startup_scripts)\/.*\.js$/.test(p);
+const language=p=>/(?:^|\/)assets\/[^/]+\/lang\/zh_cn\.json$/i.test(p);
 const json=b=>JSON.parse(b.toString('utf8').replace(/^\uFEFF/,''));
 const short=v=>String(v??'').slice(0,180);
 function safe(p){
   if(typeof p!=='string'||!p||p.length>1024||/[\\:\x00-\x1f]/.test(p)||p.startsWith('/')||p.replace(/\/$/,'').split('/').some(v=>!v||v==='.'||v==='..'))throw Error('压缩包包含不安全的路径。');
   return p;
 }
-async function entries(zip,cap){
+async function entries(zip,cap,select,onConflict){
   if(zip.entryCount>cap)throw Error('压缩包条目过多。');
   const files=new Map(),names=new Set();
   for await(const e of zip.eachEntry()){
-    const n=safe(e.fileName),key=n.toLowerCase();if(names.has(key))throw Error('压缩包有重复路径：'+n);names.add(key);
+    if(select&&!select(e.fileName))continue;
+    const n=safe(e.fileName),key=n.toLowerCase();if(names.has(key)){if(onConflict){onConflict(n);continue;}throw Error('压缩包有重复路径：'+n);}names.add(key);
     if(!n.endsWith('/')&&(e.externalFileAttributes>>>16&0xf000)!==0xa000)files.set(n,e);
   }
   return files;
@@ -60,7 +64,7 @@ export async function folderFiles(root){
   await walk(root,'');return files;
 }
 
-export async function inspectPack({file,folder,name,profile},progress=()=>{}){
+export async function inspectPack({file,folder,name,profile,scratch},progress=()=>{}){
   const docs=[],facts=new Map(),manifestMods=new Set(),warnings=new Set(),budget={left:4*1024**3};
   let packName=name||path.basename(folder||file),version=profile?.version||'',loader=profile?.loader||'unknown',release='',format=folder?'folder':'zip',declared=0,docBytes=0,nestedEntries=0;
   const warn=s=>{if(warnings.size<30)warnings.add(s);};
@@ -68,7 +72,7 @@ export async function inspectPack({file,folder,name,profile},progress=()=>{}){
     for(const d of staticDocuments(n,b.toString('utf8').replace(/^\uFEFF/,''),source)){d.text=d.text.slice(0,16000);d.title=d.title.slice(0,300);docBytes+=Buffer.byteLength(d.text);docs.push(d);}
   }catch{warn('无法解析 '+source);}
   if(docs.length>60000||docBytes>96*1024**2)throw Error('可索引资料超过上限。');};
-  let zip;try{
+  const translations=new Map();let zip,ownScratch;try{
     let files,local=Boolean(folder),prefix='',overrides='';
     if(local){
       if(sensitive((await fs.realpath(folder)).split(path.sep).join('/')+'/'))throw Error('请选择游戏实例目录，不读取存档、日志或私人目录。');
@@ -76,9 +80,20 @@ export async function inspectPack({file,folder,name,profile},progress=()=>{}){
     }
     else{
       if((await fs.stat(file)).size>archiveLimit)throw Error('压缩包超过 4 GiB。');
-      zip=await yauzl.openPromise(file,zipOptions);files=await entries(zip,100000);
+      const signature=archiveSignature(file);
+      if(signature==='zip'){zip=await yauzl.openPromise(file,zipOptions);files=await entries(zip,100000);}
+      else{
+        const dir=scratch??(ownScratch=await fs.mkdtemp(path.join(os.tmpdir(),'together-read-')));
+        files=await spoolArchive(file,dir,n=>{
+          safe(n);if(sensitive(n))return false;
+          const a=n.split('/'),base=a.at(-1);
+          return optMeta(base)||base===a.at(-2)+'.json'||a.some((v,i)=>roots.includes(v)&&(modFile(a.slice(i).join('/'))||dataFile(a.slice(i).join('/'))));
+        },progress);local=true;format=signature==='unknown'?'tar':signature;
+      }
       if(![...files.keys()].some(n=>optMeta(n)||roots.includes(n.split('/')[0]))){
-        const starts=new Set([...files.keys()].filter(n=>!sensitive(n)).flatMap(n=>{
+        const instances=new Set([...files.keys()].map(n=>n.match(/^((?:.*\/)?versions\/[^/]+\/)mods\/[^/]+\.jar$/i)?.[1]).filter(Boolean));
+        if(instances.size>1)throw Error('压缩包有多个游戏实例，请解压后选择其中一个实例文件夹。');
+        const starts=instances.size?instances:new Set([...files.keys()].filter(n=>!sensitive(n)).flatMap(n=>{
           const a=n.split('/'),i=a.findIndex((v,k)=>roots.includes(v)||k===a.length-1&&optMeta(v));return i>0?[a.slice(0,i).join('/')+'/']:[];
         }));if(starts.size===1)prefix=[...starts][0];
       }
@@ -121,8 +136,22 @@ export async function inspectPack({file,folder,name,profile},progress=()=>{}){
         try{
           if(local){const h=createHash('sha512');for await(const b of createReadStream(files.get(n))){budget.left-=b.length;if(budget.left<0)throw Error('读取超过上限。');h.update(b);}facts.set(rel,h.digest('hex'));inner=await yauzl.openPromise(files.get(n),zipOptions);}
           else{const b=await bytes(n,512*1024**2);facts.set(rel,digest(b));inner=await yauzl.fromBufferPromise(b,zipOptions);}
-          const members=await entries(inner,100000);nestedEntries+=members.size;if(nestedEntries>2000000)throw Error('模组条目总数超过上限。');
-          for(const [member,e] of members)if(!sensitive(member)&&reference(member)&&e.uncompressedSize<=1000000)add(rel+'/'+member,await read(inner,e,1000000,budget),rel+'!/'+member);
+          nestedEntries+=inner.entryCount;if(nestedEntries>2000000)throw Error('模组条目总数超过上限。');
+          const members=await entries(inner,100000,n=>!sensitive(n)&&(reference(n)||language(n)),n=>warn('忽略重名资料：'+rel+'!/'+n));
+          for(const [member,e] of members){
+            const src=rel+'!/'+member,limit=language(member)?4*1024**2:1000000;
+            if(e.uncompressedSize>limit){warn('资料过大：'+src);continue;}
+            if(e.uncompressedSize>budget.left)throw Error('解压资料超过上限。');
+            try{
+              const raw=await read(inner,e,limit,budget);
+              if(language(member)){
+                for(const [key,v] of Object.entries(json(raw))){
+                  const m=/^(?:item|block)\.([a-z0-9_]+)\.([a-z0-9_.-]+)$/.exec(key);
+                  if(m&&typeof v==='string'&&v.length<=160&&translations.size<120000)translations.set(m[1]+':'+m[2],v);
+                }
+              }else add(rel+'/'+member,raw,src);
+            }catch(e){if(budget.left<0||docs.length>60000||docBytes>96*1024**2)throw e;warn('无法解析 '+src);}
+          }
         }finally{inner?.close();}
       }else{
         const size=local?(await fs.stat(files.get(n))).size:files.get(n).uncompressedSize;
@@ -136,14 +165,19 @@ export async function inspectPack({file,folder,name,profile},progress=()=>{}){
         const b=await bytes(n,4*1024**2);facts.set(rel,digest(b));if(reference(rel)&&size<=1000000)add(rel,b,rel);
       }
     }
+    for(const doc of docs)if(doc.kind==='recipe'){
+      let result;try{result=JSON.parse(doc.text).result;}catch{continue;}
+      const id=typeof result==='string'?result:result?.id??result?.item,title=translations.get(id);
+      if(title)doc.title=title+' · '+id;
+    }
     const signatures=Object.fromEntries([...facts].sort(([a],[b])=>a<b?-1:a>b?1:0)),ids=[...manifestMods].sort();
     const key=digest(JSON.stringify([format==='folder'?'zip':format,version,loader,release,ids,signatures]),'sha256');
     const counts={};for(const d of docs)counts[d.kind]=(counts[d.kind]||0)+1;
     return {pack:{id:'archive:'+key,name:short(packName),release,version,loader,format,counts,manifestOnly:Boolean(manifest)&&!list.size,mods:format==='curseforge'?Math.max(ids.length,[...facts.keys()].filter(modFile).length):new Set([...ids,...[...facts.keys()].filter(modFile)]).size,declared,warnings:[...warnings],status:'ready',progress:100},facts:signatures,docs};
-  }finally{zip?.close();}
+  }finally{zip?.close();if(ownScratch)await fs.rm(ownScratch,{recursive:true,force:true});}
 }
 
-if(parentPort&&workerData?.task==='pack-import'){
-  try{parentPort.postMessage({result:await inspectPack(workerData.input,p=>parentPort.postMessage({progress:p}))});}
-  catch(e){parentPort.postMessage({error:e.message});}
-}
+if(process.send&&process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url)process.once('message',async input=>{
+  let reply;try{reply={result:await inspectPack(input,p=>process.send({progress:p}))};}catch(e){reply={error:e.message};}
+  process.send(reply,()=>process.disconnect());
+});

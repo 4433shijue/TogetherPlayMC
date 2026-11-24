@@ -20,7 +20,7 @@ import java.util.*;
 // Runs on the integrated server. Only a plain item stack can cross this boundary.
 final class OrbGift {
     static final TagKey<Item> ALLOW=tag("giftable"), DENY=tag("never_gift");
-    private static TagKey<Item> tag(String path){return TagKey.create(Registries.ITEM,new ResourceLocation("together_companion",path));}
+    private static TagKey<Item> tag(String path){return TagKey.create(Registries.ITEM,GameVersion.id("together_companion",path));}
     private static final Set<String> restricted=Set.of("air","bedrock","end_portal_frame","reinforced_deepslate","budding_amethyst","spawner","suspicious_sand","suspicious_gravel","barrier","light","structure_void","debug_stick","knowledge_book","command_block_minecart","petrified_oak_slab","bundle","player_head","frogspawn","infested_stone","infested_cobblestone","infested_stone_bricks","infested_mossy_stone_bricks","infested_cracked_stone_bricks","infested_chiseled_stone_bricks","infested_deepslate");
     static String drop(ServerPlayer player,Vec3 origin,JsonObject gift){
         ServerLevel level=player.serverLevel();
@@ -32,11 +32,11 @@ final class OrbGift {
         int count=gift.get("count").getAsInt();if(count<1||count>Math.min(64,stack.getMaxStackSize()))return "invalid";
         boolean obtained=player.getInventory().contains(stack)||player.getStats().getValue(Stats.ITEM_PICKED_UP.get(item))>0||player.getStats().getValue(Stats.ITEM_CRAFTED.get(item))>0;
         boolean source=obtained||stack.is(ALLOW),learned=false;
-        if(!obtained)for(Recipe<?> r:level.getRecipeManager().getRecipes()){
+        if(!obtained)for(var entry:GameVersion.recipes(level.getRecipeManager())){var r=entry.recipe();
             if(r.getResultItem(level.registryAccess()).getItem()!=item)continue;
             source=true;
             // Modded machines can impose additional stage requirements not visible in a recipe.
-            if(id.getNamespace().equals("minecraft")&&r.getType()==net.minecraft.world.item.crafting.RecipeType.CRAFTING&&player.getRecipeBook().contains(r))learned=true;
+            if(id.getNamespace().equals("minecraft")&&r.getType()==net.minecraft.world.item.crafting.RecipeType.CRAFTING&&entry.learned().test(player))learned=true;
             if(learned||!gift.get("mode").getAsString().equals("progress"))break;
         }
         if(gift.get("mode").getAsString().equals("progress")&&!obtained&&!learned)return "progress";
@@ -45,7 +45,7 @@ final class OrbGift {
             if(!index.isDone())return "indexing";
             if(!index.getNow(Set.of()).contains(id.toString()))return "unavailable";
         }
-        int room=0;for(ItemStack slot:player.getInventory().items){if(slot.isEmpty()){room+=stack.getMaxStackSize();break;}if(ItemStack.isSameItemSameTags(slot,stack))room+=stack.getMaxStackSize()-slot.getCount();}
+        int room=0;for(ItemStack slot:player.getInventory().items){if(slot.isEmpty()){room+=stack.getMaxStackSize();break;}if(GameVersion.same(slot,stack))room+=stack.getMaxStackSize()-slot.getCount();}
         if(room<count)return "full";
         Vec3 dest=player.position();if(!safePath(level,origin,dest))return "unsafe";
         stack.setCount(count);ItemEntity entity=new ItemEntity(level,origin.x,origin.y,origin.z,stack);

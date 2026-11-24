@@ -37,7 +37,7 @@ export async function plusAction({store,companion,cacheTest,role,provider,port,s
    const profiles=[];for(const p of companion.profiles){
      let installed=false,paired=false,endpointMatches=false,exists=true;
      try{const mods=await fs.readdir(path.join(p.gameDir,'mods'));installed=mods.some(n=>n.startsWith('together-companion-'+p.loader+'-')&&n.endsWith('.jar'));const c=JSON.parse(await fs.readFile(path.join(p.gameDir,'config/together-companion.json'),'utf8'));paired=c.profileId===p.id&&c.token===p.token;endpointMatches=c.endpoint==='http://127.0.0.1:'+port;}catch{exists=await fs.access(p.gameDir).then(()=>true,()=>false);}
-     const build=await inspectModBuild(p.gameDir,p.loader);
+     const build=await inspectModBuild(p.gameDir,p.loader,undefined,p.version);
      profiles.push({build,id:p.id,name:p.name,gameDir:p.gameDir,loader:p.loader,installed,paired,endpointMatches,exists,restorable:Boolean(store.get('installation:'+p.id)),hint:!exists?'找不到游戏目录，请重新添加。':!installed?'退出游戏后点击安装伙伴。':!paired||!endpointMatches?'配置与服务不一致，退出游戏后重新安装伙伴。':build.status!=='current'?build.hint:'安装配置正常，模组已是当前版本。使用 PCL 进入单人世界。'});
    }
    const model=provider(),latest=store.context.list(role).requests.find(r=>r.kind!=='historical');

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"together_live_probe","version":"1.0.0","name":"Isolated acceptance probe","environment":"client","entrypoints":{"client":["togetherplay.qa.CobbleProbe"]},"depends":{"together_companion":"*","minecraft":"1.21.1"}}

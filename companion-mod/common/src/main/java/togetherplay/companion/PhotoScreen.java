@@ -36,7 +36,7 @@ public final class PhotoScreen extends Screen {
     @Override public void onClose(){if(busy){error="正在保存，请稍等片刻。";return;}discard();c.openChat();}
     @Override public void removed(){if(texture!=null){minecraft.getTextureManager().release(texture);texture=null;}}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void tick(){input.tick();}
+    @Override public void tick(){GameVersion.tick(input);}
     @Override public void render(GuiGraphics g,int mx,int my,float partial){g.fill(0,0,width,height,0xF01B2929);g.drawString(font,title,20,14,0xB8E8D2);g.drawString(font,journal?"只保存到本机，不会自动交给模型。":"预览后再发送，只使用这张游戏画面。",20,30,0xAABCB3);
         if(texture!=null){double scale=Math.min((width-40.0)/photoWidth,(height-125.0)/photoHeight);int w=Math.max(1,(int)(photoWidth*scale)),h=Math.max(1,(int)(photoHeight*scale));g.blit(texture,(width-w)/2,47,w,h,0,0,photoWidth,photoHeight,photoWidth,photoHeight);}
         if(!error.isEmpty())g.drawString(font,font.plainSubstrByWidth(error,width-40),20,height-86,0xF0CE9D);super.render(g,mx,my,partial);}

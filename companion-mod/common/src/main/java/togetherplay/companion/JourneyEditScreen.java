@@ -28,6 +28,6 @@ public final class JourneyEditScreen extends Screen {
     private void saved(JsonObject result){if(result.has("error")){error=result.get("error").getAsString();if(minecraft.screen instanceof ConfirmScreen)minecraft.setScreen(this);return;}if(minecraft.screen==this||minecraft.screen instanceof ConfirmScreen)minecraft.setScreen(parent);}
     @Override public void onClose(){minecraft.setScreen(parent);}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void tick(){name.tick();mood.tick();}
+    @Override public void tick(){GameVersion.tick(name);GameVersion.tick(mood);}
     @Override public void render(GuiGraphics g,int mx,int my,float p){g.fill(0,0,width,height,0xF01B2929);g.drawString(font,title,20,16,0xB8E8D2);g.drawString(font,"标题",20,33,0xAABCB3);if(!goal){g.drawString(font,"心情",20,73,0xAABCB3);g.drawString(font,"记下的话",20,111,0xAABCB3);}else g.drawString(font,"备注",20,70,0xAABCB3);if(goal&&entry!=null){JsonObject d=entry.getAsJsonObject("data");String source=CompanionConfig.get(d,"completionSource","");String info=(source.equals("game")?"游戏进度已确认":source.equals("user")?"由你确认完成":"")+(d.has("position")&&!d.get("position").isJsonNull()?" · 地点 "+d.get("position"):"");g.drawString(font,font.plainSubstrByWidth(info,width-40),20,height-82,0xAABCB3);}if(!error.isEmpty())g.drawString(font,font.plainSubstrByWidth(error,width-40),20,height-82,0xF0B4A5);super.render(g,mx,my,p);}
 }

@@ -20,6 +20,6 @@ public final class FabricCompanion implements ClientModInitializer {
         KeyMapping stop=KeyBindingHelper.registerKeyBinding(new KeyMapping("key.together_companion.stop_voice",GLFW.GLFW_KEY_F7,"key.categories.together_companion"));
         ScreenEvents.AFTER_INIT.register((mc,screen,w,h)->ScreenKeyboardEvents.afterKeyPress(screen).register((s,key,scan,mod)->{if(photo.matches(key,scan))companion.capture(false);if(stop.matches(key,scan))companion.cancelReply();}));
         ClientTickEvents.END_CLIENT_TICK.register(mc->{companion.tick();companion.voice.tick(voice.isDown(),stop.consumeClick());while(voice.consumeClick()){}while(chat.consumeClick())companion.openChat();while(photo.consumeClick())companion.capture(false);});
-        WorldRenderEvents.AFTER_TRANSLUCENT.register(c->OrbRenderer.render(c.matrixStack(),c.camera(),c.tickDelta()));
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(c->OrbRenderer.render(c.matrixStack(),c.camera(),FabricFrames.partial(c)));
     }
 }
