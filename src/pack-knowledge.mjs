@@ -24,6 +24,24 @@ export function parseSnbt(source) {
   return value();
 }
 
+export function staticDocuments(relative,content,source){
+  const add=(kind,title,text,priority,quest='')=>({id:'local:'+relative+(quest?':'+quest:''),kind,title,text,priority,quest,source});
+  if(relative.endsWith('.snbt')){
+    const data=parseSnbt(content);
+    return (data.quests??[]).map(q=>add('quest',textOf(q.title??data.title??'任务'),textOf({title:q.title,description:q.description,subtitle:q.subtitle,tasks:q.tasks}),80,String(q.id)));
+  }
+  if(relative.endsWith('.json')){
+    const data=JSON.parse(content);
+    if(relative.includes('patchouli_books'))return [add('manual',textOf(data.name??relative),textOf(data),70)];
+    if(/\/recipes?\//.test(relative))return [add('recipe',relative,JSON.stringify(data),60)];
+  }
+  if(relative.endsWith('.js')){
+    const declarations=[...content.matchAll(/\.(shaped|shapeless|smelting|blasting|smoking|campfireCooking|stonecutting)\s*\(\s*(['"])([^'"\r\n]+)\2/g)].map(m=>m[1]+': '+m[3]);
+    if(declarations.length)return [add('script-reference',path.basename(relative),'KubeJS 静态配方线索，参数和最终配方需要用游戏实际加载数据核对。\n'+declarations.join('\n'),30)];
+  }
+  return [];
+}
+
 export class PackKnowledge {
   constructor(store,emit=()=>{}) {
     this.store=store;this.db=store.db;this.emit=emit;this.jobs=new Map();
@@ -47,14 +65,20 @@ export class PackKnowledge {
   remove(pack,id){const old=this.db.prepare('SELECT * FROM companion_documents WHERE pack=? AND id=?').get(pack,id);if(!old)return;this.db.prepare("INSERT INTO companion_search(companion_search,rowid,terms) VALUES('delete',?,?)").run(old.rowid,searchTerms(old.title+' '+old.text).join(' '));this.db.prepare('DELETE FROM companion_documents WHERE rowid=?').run(old.rowid);}
   runtimeKey(pack,world){return `${pack}:world:${hash(world).slice(0,24)}`;}
   plan(pack,world,inventory,item,count,recipeId){const key=this.runtimeKey(pack,world);if(!this.store.get('runtime-ready:'+key))throw new Error('当前世界的实际配方还在同步，请稍后再试。');const recipes=this.db.prepare("SELECT text FROM companion_documents WHERE pack=? AND kind='recipe'").all(key).map(normalizeRecipe).filter(Boolean);return materialPlan(recipes,inventory,item,count,recipeId);}
-  search(pack,query,{unlocked=[],spoilers=false,limit=8,world,staticOnly=false}={}) {
-    if(world){const options={unlocked,spoilers,limit};return [...(this.store.get('runtime-ready:'+this.runtimeKey(pack,world))?this.search(this.runtimeKey(pack,world),query,options):[]),...this.search(pack,query,{...options,staticOnly:true})].slice(0,limit);}
+  search(pack,query,{unlocked=[],spoilers=false,limit=8,world,staticOnly=false,withoutRecipes=false}={}) {
+    if(world){
+      const options={unlocked,spoilers,limit},key=this.runtimeKey(pack,world),ready=this.store.get('runtime-ready:'+key);
+      const staticOptions={...options,staticOnly:true,withoutRecipes:Boolean(ready)},archive=this.store.get('pack-binding:'+pack),local=this.search(pack,query,staticOptions);
+      const extra=archive?this.search(archive,query,staticOptions).map(d=>({...d,source:'导入包资料：'+d.source})):[];
+      const docs=[...(ready?this.search(key,query,options):[]),...local,...extra];
+      return [...new Map(docs.map(d=>[d.source+'\n'+d.title,d])).values()].slice(0,limit);
+    }
     const terms=searchTerms(query).slice(0,40);if(!terms.length)return [];
     const match=terms.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR ');
-    const select='SELECT d.*,bm25(companion_search) AS relevance FROM companion_search JOIN companion_documents d ON d.rowid=companion_search.rowid WHERE companion_search MATCH ? AND d.pack=?';
+    const select='SELECT d.*,bm25(companion_search) AS relevance FROM companion_search JOIN companion_documents d ON d.rowid=companion_search.rowid WHERE companion_search MATCH ? AND d.pack=?'+(withoutRecipes?" AND d.kind NOT IN ('recipe','script-reference')":'')+(staticOnly?" AND d.id NOT LIKE 'runtime:%'":'');
     const candidates=this.db.prepare(select+' ORDER BY relevance LIMIT 120').all(match,pack);
     // Long ingredient lists rank below short item names in BM25. Reserve candidates for actual recipes.
-    const recipes=this.db.prepare(select+" AND d.kind='recipe' ORDER BY relevance LIMIT 80").all(match,pack);
+    const recipes=withoutRecipes?[]:this.db.prepare(select+" AND d.kind='recipe' ORDER BY relevance LIMIT 80").all(match,pack);
     const rows=[...new Map([...candidates,...recipes].map(d=>[d.id,d])).values()];
     const allowed=new Set(unlocked.map(String));
     const score=d=>terms.filter(t=>(d.title+' '+d.text).toLowerCase().includes(t)).length*100+d.priority+(d.kind==='recipe'?25:0);
@@ -84,17 +108,7 @@ export class PackKnowledge {
     const extract=(relative,content,source)=>{
       if(content.length>1_000_000)return;
       try{
-        if(relative.endsWith('.snbt')){
-          const data=parseSnbt(content);
-          for(const q of data.quests??[]){add({id:`local:${relative}:${q.id}`,kind:'quest',title:textOf(q.title??data.title??'任务'),text:textOf({title:q.title,description:q.description,subtitle:q.subtitle,tasks:q.tasks}),source,priority:80,quest:String(q.id)});}
-        }else if(relative.endsWith('.json')){
-          const data=JSON.parse(content);
-          if(relative.includes('patchouli_books'))add({id:`local:${relative}`,kind:'manual',title:textOf(data.name??relative),text:textOf(data),source,priority:70});
-          else if(relative.includes('/recipes/'))add({id:`local:${relative}`,kind:'recipe',title:relative,text:JSON.stringify(data),source,priority:60});
-        }else if(relative.endsWith('.js')){
-          const declarations=[...content.matchAll(/\.(shaped|shapeless|smelting|blasting|smoking|campfireCooking|stonecutting)\s*\(\s*(['"])([^'"\r\n]+)\2/g)].map(m=>`${m[1]}: ${m[3]}`);
-          if(declarations.length)add({id:`local:${relative}`,kind:'script-reference',title:path.basename(relative),text:'KubeJS 静态配方线索，参数和最终配方需要用游戏实际加载数据核对。\n'+declarations.join('\n'),source,priority:30});
-        }
+        for(const doc of staticDocuments(relative,content,source))add(doc);
       }catch{pack.warnings.push(`无法完整解析 ${relative}`);}
     };
     try{

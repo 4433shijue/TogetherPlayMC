@@ -1,3 +1,4 @@
+import {setupPackImport} from './pack-import.js';
 export function setupPlus({getState,api,toast,run,refresh}){
  const kindLabel=k=>({chat:'主动聊天',vision:'截图提问',proactive:'伙伴主动说话',summary:'整理聊天要点',journal:'整理日记','cache-test':'缓存验证',probe:'接口检查',overview:'整合包概览',legacy:'旧版操作模式'}[k]??k);
  const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;},call=async(action,b={})=>{const owner=getState().selectedRole,result=await api('/api/plus/'+action,b);if(owner!==getState().selectedRole)throw Error('伙伴已切换，请重新打开这个页面。');return result;};
@@ -21,6 +22,7 @@ export function setupPlus({getState,api,toast,run,refresh}){
    for(const p of result.profiles){const card=el('article');card.append(el('h3',p.name),el('p',p.version+' · '+p.loader),el('p',p.note,'small'));const label=el('label','实际游戏目录（这里的 mods 会被安装）'),select=el('select');for(const dir of [...new Set([p.gameDir,p.versionDir,p.sharedDir])]){const o=el('option',dir);o.value=dir;select.append(o);}label.append(select);card.append(label);const add=btn(p.supported?'保存这个版本':'暂不支持，先在 PCL 安装 1.20.1 Fabric / Forge',async()=>{await api('/api/companion/profile',{...p,gameDir:select.value});$('game-wizard').close();await refresh();await load('connect');toast('版本已添加。先退出游戏，再点击“安装伙伴”。');});add.disabled=!p.supported;card.append(add);$('scanned-games').append(card);}
    }catch(e){$('scan-status').textContent=e.message;throw e;}
  });
+ const packImport=setupPackImport({getState,api,run,el,btn});
  function table(headers,rows){const t=el('table'),head=el('tr');headers.forEach(h=>head.append(el('th',h)));t.append(head);for(const values of rows){const row=el('tr');values.forEach(v=>row.append(el('td',String(v??'未知'))));t.append(row);}return t;}
  let archiveOffset=0,placeData,usageLoaded=false,roleSeen='';
  const prefKeys=['proactiveMinutes','proactiveHourly','dailyRequests','dailyInput','inputChars'];
@@ -38,6 +40,7 @@ export function setupPlus({getState,api,toast,run,refresh}){
  async function load(page){
   if(!getState())return;
   if(page==='connect'){
+   await packImport.load();
    const d=await call('diagnostics');$('connection-status').textContent=d.service+' '+d.version+' · '+(d.connected?'已进入 '+d.world:'等待你打开游戏')+' · '+(d.modelReady?'模型已配置':'模型尚未配好');
    const box=$('diagnosis-list');box.replaceChildren(el('p',d.advice));if(d.connected)box.append(el('p','正在运行的游戏模组：'+(d.gameBuildVersion??'未知旧版')+(d.gameBuildVersion!==d.version?' · 请保存退出游戏后更新伙伴模组。':'')));if(d.storage)box.append(el('p','数据保存位置：'+d.storage.directory+' · '+(d.storage.migration?.status==='completed'?'已完成旧数据迁移':d.storage.migration?.status==='existing'?'稳定目录已在使用':'新建稳定目录')));if(d.latest?.status==='failed')box.append(el('article','最近一次模型请求失败：'+d.latest.error));if(!d.profiles.length)box.append(el('p','还没有添加游戏。点上面的“添加我的游戏”开始。','empty'));
    for(const p of d.profiles){const c=el('article');c.append(el('h3',p.name),el('p',p.gameDir,'path-text'),el('p',p.hint),el('small','游戏模组：'+(p.build?.version??'旧版或未知')+' · '+(p.build?.status==='current'?'文件一致':'需要核对')));const actions=el('div',undefined,'buttons');actions.append(btn('安装伙伴 / 更新',async()=>{const r=await api('/api/companion/install',{profileId:p.id});toast('安装完成，旧文件已备份。现在可以用 PCL 启动这个版本。');await refresh();await load('connect');}),btn('复制模组目录',async()=>{await navigator.clipboard.writeText(p.gameDir+'\\mods');toast('目录已复制。');}));if(p.restorable)actions.append(btn('恢复更新前的伙伴',async()=>{if(!confirm('恢复这个游戏更新前的伙伴模组与连接配置？其他模组和存档会保留。'))return;const r=await api('/api/companion/restore',{profileId:p.id});toast(r.message);await load('connect');}));c.append(actions);box.append(c);}

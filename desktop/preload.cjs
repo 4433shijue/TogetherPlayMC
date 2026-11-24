@@ -1,2 +1,2 @@
-const {contextBridge,ipcRenderer}=require('electron');
-contextBridge.exposeInMainWorld('togetherDesktop',{connect:()=>ipcRenderer.invoke('connect'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),openWeb:()=>ipcRenderer.invoke('open-web'),port:value=>ipcRenderer.invoke('port',value),storageInfo:()=>ipcRenderer.invoke('storage-info')});
+const {contextBridge,ipcRenderer,webUtils}=require('electron');
+contextBridge.exposeInMainWorld('togetherDesktop',{connect:()=>ipcRenderer.invoke('connect'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),packFilePath:file=>webUtils.getPathForFile(file),openWeb:()=>ipcRenderer.invoke('open-web'),port:value=>ipcRenderer.invoke('port',value),storageInfo:()=>ipcRenderer.invoke('storage-info')});

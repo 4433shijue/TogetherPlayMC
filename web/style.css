@@ -18,6 +18,7 @@
 .chat-color-settings{grid-column:1/-1;width:100%;margin-top:12px}.native-chat-preview{background:#202a25;padding:18px;border-radius:8px;font-family:monospace;line-height:1.8}
 /* Desktop and browser share the same responsive workspace. */
 [hidden]{display:none!important}
+#pack-library{overflow-wrap:anywhere;min-width:0}#pack-library select,#pack-library input{max-width:100%;min-width:0}#pack-library form{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}#pack-library form input{flex:1 1 210px}#pack-library details{margin:8px 0}#pack-library details p{white-space:pre-wrap;max-height:18rem;overflow:auto}#pack-library .pack-picker{position:relative;cursor:pointer;padding:8px 14px;border:1px dashed currentColor;border-radius:6px;margin:0}#pack-library .pack-picker:focus-within{outline:2px solid currentColor;outline-offset:2px}.pack-picker input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 /* Compact navigation and a real, scrollable model picker. */
 aside nav{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 245px);overflow-y:auto;scrollbar-width:thin}
 .nav-group{border:1px solid transparent;border-radius:10px;padding:2px 0}

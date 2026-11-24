@@ -116,6 +116,7 @@ Windows 包保留未修改的 @img/sharp-win32-x64/lib/libvips-42.dll 与 libvip
 | onnxruntime-common | 1.22.0-dev.20250409-89f8206ba4 | MIT | [上游](https://github.com/Microsoft/onnxruntime) | 见包内声明与上游 |
 | onnxruntime-node | 1.21.0 | MIT | [上游](https://github.com/Microsoft/onnxruntime) | 见包内声明与上游 |
 | onnxruntime-web | 1.22.0-dev.20250409-89f8206ba4 | MIT | [上游](https://github.com/Microsoft/onnxruntime) | 见包内声明与上游 |
+| pend | 1.2.0 | MIT | [上游](https://github.com/andrewrk/node-pend) | [随附许可](third-party-licenses/npm/pend-1.2.0/) |
 | platform | 1.3.6 | MIT | [上游](https://github.com/bestiejs/platform.js) | [随附许可](third-party-licenses/npm/platform-1.3.6/) |
 | prismarine-auth | 3.1.1 | MIT | [上游](https://github.com/PrismarineJS/prismarine-auth) | [随附许可](third-party-licenses/npm/prismarine-auth-3.1.1/) |
 | prismarine-biome | 1.4.0 | MIT | [上游](https://github.com/PrismarineJS/prismarine-biome) | 见包内声明与上游 |
@@ -168,4 +169,5 @@ Windows 包保留未修改的 @img/sharp-win32-x64/lib/libvips-42.dll 与 libvip
 | whatwg-url | 5.0.0 | MIT | [上游](https://github.com/jsdom/whatwg-url) | [随附许可](third-party-licenses/npm/whatwg-url-5.0.0/) |
 | xxhash-wasm | 0.4.2 | MIT | [上游](https://github.com/jungomi/xxhash-wasm) | [随附许可](third-party-licenses/npm/xxhash-wasm-0.4.2/) |
 | yallist | 5.0.0 | BlueOak-1.0.0 | [上游](https://github.com/isaacs/yallist) | [随附许可](third-party-licenses/npm/yallist-5.0.0/) |
+| yauzl | 3.4.0 | MIT | [上游](https://github.com/thejoshwolfe/yauzl) | [随附许可](third-party-licenses/npm/yauzl-3.4.0/) |
 | yggdrasil | 1.8.0 | MIT | [上游](https://github.com/PrismarineJS/node-yggdrasil) | [随附许可](third-party-licenses/npm/yggdrasil-1.8.0/) |

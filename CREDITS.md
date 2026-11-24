@@ -26,6 +26,7 @@
 | [prismarine-nbt](https://github.com/PrismarineJS/prismarine-nbt) | NBT 数据读取 | 2.8.0，MIT |
 | [vec3](https://github.com/PrismarineJS/node-vec3) | 向量运算 | 0.1.10，上游包标注 BSD；保留上游声明 |
 | [fflate](https://github.com/101arrowz/fflate) | ZIP 处理 | 0.8.3，MIT |
+| [yauzl](https://github.com/thejoshwolfe/yauzl) | 按条目读取用户导入的整合包及模组 JAR | 3.4.0，MIT |
 | [sharp](https://github.com/lovell/sharp) / [libvips](https://github.com/libvips/libvips) | Transformers.js 间接依赖的图像处理组件 | sharp 0.34.5 / libvips 8.17.3；Apache-2.0 与 LGPL-3.0-or-later 等第三方许可 |
 | [Fabric Loader](https://github.com/FabricMC/fabric-loader) / [Fabric API](https://github.com/FabricMC/fabric-api) | Fabric 伙伴模组的加载与事件 API | Loader 0.16.14 / API 0.92.2+1.20.1，Apache-2.0 |
 | [Minecraft Forge](https://github.com/MinecraftForge/MinecraftForge) | Forge 伙伴模组的加载与事件 API | 47.4.22，LGPL-2.1；用户安装的游戏环境提供 |

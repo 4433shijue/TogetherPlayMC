@@ -14,12 +14,12 @@ export async function scanGames(input){
  for(const dir of dirs){
   const name=path.basename(dir),file=path.join(dir,name+'.json');let m;try{m=JSON.parse(await fs.readFile(file,'utf8'));}catch{continue;}
   const libs=(m.libraries??[]).map(l=>l.name??'').join(' '),args=JSON.stringify(m.arguments??{});
-  const loader=/net\.fabricmc:/.test(libs)?'fabric':/net\.minecraftforge:/.test(libs)?'forge':'unknown';
+  const loader=/net\.neoforged:/.test(libs)?'neoforge':/org\.quiltmc:/.test(libs)?'quilt':/net\.fabricmc:/.test(libs)?'fabric':/net\.minecraftforge:/.test(libs)?'forge':'unknown';
   const version= /1\.20\.1(?:["\s:-]|$)/.test([m.id,m.inheritsFrom,libs,args].join(' '))?'1.20.1':m.inheritsFrom||m.id;
   const shared=path.basename(path.dirname(dir))==='versions'?path.dirname(path.dirname(dir)):dir;
   const ini=await fs.readFile(path.join(dir,'PCL/Setup.ini'),'utf8').catch(()=>''),setting=ini.match(/VersionArgumentIndie=(\d+)/)?.[1];
   const gameDir=setting==='0'?shared:setting==='1'||await exists(path.join(dir,'mods'))?dir:shared;
-  result.push({name,version,loader,gameDir,versionDir:dir,sharedDir:shared,supported:version==='1.20.1'&&loader!=='unknown',note:setting===undefined?'请核对 PCL 的版本隔离设置，确认下面的实际模组目录。':'已读取版本隔离配置，请核对实际模组目录。'});
+  result.push({name,version,loader,gameDir,versionDir:dir,sharedDir:shared,supported:version==='1.20.1'&&['fabric','forge'].includes(loader),note:setting===undefined?'请核对 PCL 的版本隔离设置，确认下面的实际模组目录。':'已读取版本隔离配置，请核对实际模组目录。'});
  }
  if(!result.length)throw Error('没有找到版本配置。在 PCL 打开你要玩的版本文件夹，复制地址后重新扫描。');return result;
 }

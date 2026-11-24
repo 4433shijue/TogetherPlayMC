@@ -2,6 +2,7 @@ import {appVersion} from './version.mjs';
 import {keepsakes} from './keepsakes.mjs';
 import {timingSafeEqual} from 'node:crypto';
 import {PackKnowledge} from './pack-knowledge.mjs';
+import {PackImports} from './pack-imports.mjs';
 import {OfficialResearch} from './official-research.mjs';
 import {ChatCompanion} from './chat-companion.mjs';
 import {configuredProfiles,pairProfile,publicProfile,installProfile,restoreProfile} from './companion-install.mjs';
@@ -22,6 +23,7 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
   const profiles=(initialProfiles??await configuredProfiles(store)).map(p=>pairProfile(store,p));let sequence=0,closed=false;const events=[],jobs=new Set();
   const broadcast=event=>{if(event.type==='companion_cancel')voice.cancel();events.push({...event,eventId:++sequence});if(events.length>300)events.shift();emit(event);};
   const knowledge=new PackKnowledge(store,broadcast),research=new OfficialResearch(store);
+  const imports=new PackImports(knowledge,profiles);
   const chat=new ChatCompanion({store,provider,visionProvider,knowledge,research,emit:broadcast,request});
   const journey=chat.journey,autoIndexed=new Set();
   async function journeyAction(b,native=false){
@@ -65,7 +67,7 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
   const index=profile=>{const job=knowledge.scan(profile).catch(e=>chat.log('notice',{message:e.message}));jobs.add(job);void job.finally(()=>jobs.delete(job));return job;};
   const auth=req=>{const token=Buffer.from(String(req.headers.authorization??'').replace(/^Bearer /,''));return profiles.find(p=>token.length===Buffer.byteLength(p.token)&&timingSafeEqual(token,Buffer.from(p.token)));};
   return {
-    chat,knowledge,profiles,journey,voice,
+    chat,knowledge,profiles,journey,voice,imports,
     publicState:()=>({profiles:profiles.map(publicProfile),knowledge:knowledge.packs().map(p=>knowledge.status(p.id))}),
     async native(req,res,url,body) {
       if(url.pathname==='/companion/v1/health'){json(res,200,{app:'TogetherPlayMC',version:appVersion,protocol:1,capabilities:journeyCapabilities,mode:getMode()});return;}
@@ -109,6 +111,19 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
     },
     async web(req,res,url,body){
       if(!url.pathname.startsWith('/api/companion/'))return false;
+      if(url.pathname==='/api/companion/pack-import'){
+        if(req.method==='GET'){json(res,200,imports.state());return true;}
+        if(req.method!=='POST'){json(res,405,{error:'不支持的方法。'});return true;}
+        if(url.searchParams.has('upload')){json(res,200,await imports.upload(url.searchParams.get('upload'),req));return true;}
+        const b=await body(req);let result;
+        if(b.action==='start')result=imports.start(b);
+        else if(b.action==='cancel'){imports.cancel(b.id);result=imports.state();}
+        else if(b.action==='matches')result=await imports.matches(b.pack,b.root);
+        else if(b.action==='bind'||b.action==='unbind')result=await imports.bind(b.pack,b.profileId,b.action==='unbind');
+        else if(b.action==='search'&&typeof b.pack==='string'&&b.pack.startsWith('archive:')&&knowledge.pack(b.pack))result=knowledge.search(b.pack,String(b.query??'').slice(0,400),{spoilers:true,staticOnly:true});
+        else throw Error('无效的资料库操作。');
+        json(res,200,result);return true;
+      }
       if(url.pathname==='/api/companion/keepsakes'&&req.method==='GET'){const owner=url.searchParams.get('role')||role().id;if(!store.role(owner))throw Error('伙伴不存在。');json(res,200,keepsakes(store,owner));return true;}
       if(url.pathname==='/api/companion/journey'&&req.method==='POST'){json(res,200,await journeyAction(await body(req)));return true;}
       if(url.pathname==='/api/companion/media'&&req.method==='GET'){const m=journey.media({role:role().id,world:url.searchParams.get('world')},url.searchParams.get('id'));res.writeHead(200,{'content-type':m.data.mime,'cache-control':'no-store'});res.end(m.bytes);return true;}
@@ -144,6 +159,6 @@ export async function createCompanionAPI({store,provider,visionProvider,emit,rol
       }
       return true;
     },
-    async close(){closed=true;voice.cancel();chat.close();knowledge.close();await Promise.allSettled([...jobs,chat.drainMemory()]);}
+    async close(){closed=true;voice.cancel();chat.close();knowledge.close();await Promise.allSettled([...jobs,imports.close(),chat.drainMemory()]);}
   };
 }
