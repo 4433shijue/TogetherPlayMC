@@ -94,6 +94,14 @@ test('unknown archive matches an old renamed Forge instance, survives restart an
  await im.bind(id,m.recommended,true);assert.equal(im.bound(id).length,0);assert.throws(()=>im.search(id,'月光',m.recommended));assert.ok(im.search(id,'月光').length);
  await im.matcher.root(launcher,true);assert.deepEqual((await im.matches(id)).candidates,[]);
 });
+test('forgetting a launcher root accepts its directory alias and a saved path that no longer exists',async t=>{
+ const {im,dir}=await library(t),real=path.join(dir,'launcher'),alias=path.join(dir,'alias');
+ await fs.mkdir(real);await fs.symlink(real,alias,process.platform==='win32'?'junction':'dir');
+ await im.matcher.root(alias);assert.deepEqual(im.matcher.roots(),[await fs.realpath(real)]);
+ await im.matcher.root(alias,true);assert.deepEqual(im.matcher.roots(),[]);await fs.unlink(alias);
+ await im.matcher.root(real);const [saved]=im.matcher.roots();await fs.rmdir(real);
+ await im.matcher.root(saved,true);assert.deepEqual(im.matcher.roots(),[]);
+});
 test('unknown loose folders, zero-evidence manifests and config-only hits are never auto-selected',async t=>{
  const {im,dir}=await library(t),game=path.join(dir,'Loose'),archive=path.join(dir,'pack.zip');
  await writeTree(game,{[manual]:{name:'内容'}});await im.matcher.root(game);

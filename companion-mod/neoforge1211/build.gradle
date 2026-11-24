@@ -13,3 +13,5 @@ def overlay = tasks.register('prepareVersionSources', Sync) {
     into layout.buildDirectory.dir('generated/version-sources')
 }
 sourceSets.main.java.setSrcDirs([overlay])
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath

@@ -49,9 +49,9 @@ export class PackMatcher{
  roots(){return this.store.get('pack-search-roots',[]);}
  async root(dir,remove=false){
    if(typeof dir!=='string'||!path.isAbsolute(dir))throw Error('请选择启动器或实例的完整目录。');
-   const value=remove?dir:await fs.realpath(dir),key=pathKey(value),old=this.roots();
+   const value=remove?await fs.realpath(dir).catch(()=>dir):await fs.realpath(dir),key=pathKey(value),old=this.roots();
    if(!remove&&(path.parse(value).root===value||privatePath(value.replaceAll('\\','/')+'/')||!(await fs.stat(value)).isDirectory()))throw Error('请选择启动器或实例目录，不扫描整盘、存档或私人目录。');
-   const next=old.filter(x=>pathKey(x)!==key);if(!remove)next.push(value);if(next.length>24)throw Error('最多记住 24 个目录。');
+   const next=old.filter(x=>pathKey(x)!==key&&(!remove||pathKey(x)!==pathKey(dir)));if(!remove)next.push(value);if(next.length>24)throw Error('最多记住 24 个目录。');
    this.store.set('pack-search-roots',next);this.recent.clear();return next;
  }
  async matches(id,useRecent=false){
